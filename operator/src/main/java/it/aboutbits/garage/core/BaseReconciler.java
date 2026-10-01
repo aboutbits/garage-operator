@@ -118,6 +118,20 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         return Optional.of(s3Connection);
     }
 
+    /// During namespace deletion the backend, its Secret and the [S3Connection] disappear at once,
+    /// so cleanup waiting for them would block the namespace in `Terminating` forever.
+    public boolean isNamespaceTerminating(
+            KubernetesClient kubernetesClient,
+            CR resource
+    ) {
+        var namespace = kubernetesClient.namespaces()
+                .withName(resource.getMetadata().getNamespace())
+                .get();
+
+        //noinspection ConstantConditions
+        return namespace == null || namespace.getMetadata().getDeletionTimestamp() != null;
+    }
+
     public <E extends Exception> UpdateControl<CR> handleError(
             CR resource,
             S status,

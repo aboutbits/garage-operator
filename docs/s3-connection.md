@@ -14,7 +14,7 @@ For Garage the two are siblings, not alternatives:
 | `S3Connection`                       | Can I administer object storage on this backend right now?  |
 
 A connection only reports `READY` when the backend can actually serve requests. A Garage node that answers its Admin API but has no layout reports health `unavailable`, and the connection stays
-`PENDING` with a message pointing at the `GarageCluster`. Because `Bucket` and key resources gate on their connection being `READY`, that one check keeps them from acting against a cluster that is not finished bootstrapping.
+`PENDING` with a message pointing at the `GarageCluster`. Because [`Bucket`](bucket.md) and key resources gate on their connection being `READY`, that one check keeps them from acting against a cluster that is not finished bootstrapping.
 
 Both resources reference the same admin endpoint and Secret. That duplication is deliberate — each is self-contained, and a backend the operator only *uses* does not need a `GarageCluster` at all.
 

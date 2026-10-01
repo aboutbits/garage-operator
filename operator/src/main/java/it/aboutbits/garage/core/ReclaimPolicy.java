@@ -1,0 +1,19 @@
+package it.aboutbits.garage.core;
+
+import com.fasterxml.jackson.annotation.JsonValue;
+import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.NullMarked;
+
+@RequiredArgsConstructor
+@NullMarked
+public enum ReclaimPolicy {
+    RETAIN("Retain"),
+    DELETE("Delete");
+
+    private final String policy;
+
+    @JsonValue
+    public String toValue() {
+        return policy;
+    }
+}

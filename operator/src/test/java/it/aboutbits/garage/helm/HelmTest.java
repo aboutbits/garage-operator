@@ -51,6 +51,8 @@ class HelmTest {
     /// file). Spelled out rather than derived, because `bucketaccess` → `bucketaccesses` is not a
     /// plain `+ "s"`.
     private static final Map<String, String> CRD_NAMES = Map.of(
+            "accesskey", "accesskeys",
+            "bucket", "buckets",
             "garagecluster", "garageclusters",
             "s3connection", "s3connections"
     );

@@ -1,6 +1,9 @@
 package it.aboutbits.garage.core;
 
+import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.api.model.Secret;
+import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import jakarta.inject.Singleton;
 import org.jspecify.annotations.NullMarked;
@@ -8,6 +11,7 @@ import org.jspecify.annotations.NullMarked;
 import java.nio.charset.Charset;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Objects;
 
 @Singleton
 @NullMarked
@@ -16,6 +20,9 @@ public final class KubernetesService {
 
     /// The key the AboutBits Garage Helm chart stores the Admin API token under (https://github.com/aboutbits/helm-garage).
     public static final String SECRET_DATA_ADMIN_TOKEN_KEY = "admin_token";
+
+    public static final String LABEL_MANAGED_BY = "app.kubernetes.io/managed-by";
+    public static final String LABEL_MANAGED_BY_VALUE = "garage-operator";
 
     public String getSecretRefToken(
             KubernetesClient kubernetesClient,
@@ -65,6 +72,93 @@ public final class KubernetesService {
         }
 
         return token;
+    }
+
+    /// Always written into the owner's namespace: cross-namespace owner references are ignored,
+    /// leaving orphans with live credentials. A Secret the owner does not own is never taken over,
+    /// as it would be garbage-collected with the owner.
+    ///
+    /// @return whether anything actually changed
+    public boolean upsertOwnedSecret(
+            KubernetesClient kubernetesClient,
+            HasMetadata owner,
+            String secretName,
+            Map<String, String> data
+    ) {
+        var namespace = owner.getMetadata().getNamespace();
+
+        var existing = kubernetesClient.secrets()
+                .inNamespace(namespace)
+                .withName(secretName)
+                .get();
+
+        if (existing != null && !isOwnedBy(existing, owner)) {
+            throw new IllegalStateException("A Secret of this name already exists and is not owned by this resource, so it is left untouched. Choose a different secretName, or delete the Secret [secret.namespace=%s, secret.name=%s]".formatted(
+                    namespace,
+                    secretName
+            ));
+        }
+
+        if (existing != null && isUpToDate(existing, data)) {
+            return false;
+        }
+
+        var secret = new SecretBuilder()
+                .withNewMetadata()
+                .withNamespace(namespace)
+                .withName(secretName)
+                .addToLabels(LABEL_MANAGED_BY, LABEL_MANAGED_BY_VALUE)
+                .withOwnerReferences(new OwnerReferenceBuilder()
+                        .withApiVersion(owner.getApiVersion())
+                        .withKind(owner.getKind())
+                        .withName(owner.getMetadata().getName())
+                        .withUid(owner.getMetadata().getUid())
+                        .withController(true)
+                        .withBlockOwnerDeletion(false)
+                        .build()
+                )
+                .endMetadata()
+                .withType(SECRET_TYPE_OPAQUE)
+                .withStringData(data)
+                .build();
+
+        // Forced, as the Secret is verified to be the owner's own: hand-edited fields would otherwise conflict.
+        kubernetesClient.secrets()
+                .inNamespace(namespace)
+                .resource(secret)
+                .forceConflicts()
+                .serverSideApply();
+
+        return true;
+    }
+
+    private boolean isUpToDate(
+            Secret secret,
+            Map<String, String> data
+    ) {
+        var currentData = secret.getData();
+
+        if (currentData == null || currentData.size() != data.size()) {
+            return false;
+        }
+
+        return data.entrySet().stream().allMatch(entry -> {
+            var encoded = currentData.get(entry.getKey());
+
+            return encoded != null && entry.getValue().equals(decode(encoded));
+        });
+    }
+
+    private boolean isOwnedBy(
+            Secret secret,
+            HasMetadata owner
+    ) {
+        var ownerReferences = secret.getMetadata().getOwnerReferences();
+
+        return ownerReferences != null
+                && ownerReferences.stream().anyMatch(
+                        ownerReference -> Objects.equals(ownerReference.getUid(), owner.getMetadata().getUid())
+                );
     }
 
     private String getSecretNamespaceOrDefault(
