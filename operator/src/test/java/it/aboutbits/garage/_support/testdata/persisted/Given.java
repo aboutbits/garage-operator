@@ -2,6 +2,7 @@ package it.aboutbits.garage._support.testdata.persisted;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import it.aboutbits.garage._support.testdata.persisted.creator.AccessKeyCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.BucketAccessCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.BucketCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.S3ConnectionCreate;
@@ -84,6 +85,13 @@ public class Given {
             return new AccessKeyCreate(
                     numberOfItems,
                     given,
+                    kubernetesClient
+            );
+        }
+
+        public BucketAccessCreate bucketAccess() {
+            return new BucketAccessCreate(
+                    numberOfItems,
                     kubernetesClient
             );
         }

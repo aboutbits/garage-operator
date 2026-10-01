@@ -53,6 +53,7 @@ class HelmTest {
     private static final Map<String, String> CRD_NAMES = Map.of(
             "accesskey", "accesskeys",
             "bucket", "buckets",
+            "bucketaccess", "bucketaccesses",
             "garagecluster", "garageclusters",
             "s3connection", "s3connections"
     );

@@ -4,7 +4,7 @@ An `AccessKey` creates a set of S3 credentials on the backend named by its
 [`S3Connection`](s3-connection.md), and writes them into a Secret it owns.
 
 On its own an access key can do nothing: it has no access to any bucket until a
-`BucketAccess` grants it some.
+[`BucketAccess`](bucket-access.md) grants it some.
 
 ## Example
 
