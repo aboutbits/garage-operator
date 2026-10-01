@@ -61,7 +61,7 @@ git config core.hooksPath .githooks
 
 ### Development
 
-You can run the operator in dev mode, against a throwaway k3s cluster, using:
+You can run the operator in dev mode, against a throwaway k3s cluster and a real Garage node, using:
 
 ```bash
 make run
@@ -80,6 +80,8 @@ make test
 
 ./gradlew :operator:test
 ```
+
+The tests are `@QuarkusTest` integration tests against real infrastructure provided by Quarkus Dev Services: a k3s cluster with the CRDs applied, and a Garage node started from `operator/src/main/docker/compose-devservices.yml`. The Garage image there is pinned to the version the Helm chart deploys, so the Admin API contract is exercised against the real thing.
 
 The Helm chart installation test currently fails against **Helm 4**, whose server-side apply conflicts with the CRDs the fabric8 client already applied in test mode; CI runs Helm 3. The same is true of the sibling
 [PostgreSQL Operator](https://github.com/aboutbits/postgresql-operator).

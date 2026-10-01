@@ -2,3 +2,11 @@ quarkus:
   operator-sdk:
     activate-leader-election-for-profiles:
       - test
+  compose:
+    devservices:
+      files: src/main/docker/compose-devservices.yml
+
+# The admin token the Compose Dev Service's garage.toml is configured with.
+garage:
+  admin:
+    token: test-admin-token
