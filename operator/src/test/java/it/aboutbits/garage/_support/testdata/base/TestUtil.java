@@ -7,6 +7,7 @@ import it.aboutbits.garage.core.CRPhase;
 import it.aboutbits.garage.core.CRStatus;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.bucket.Bucket;
+import it.aboutbits.garage.crd.bucketaccess.BucketAccess;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import org.jspecify.annotations.NullMarked;
@@ -21,6 +22,7 @@ public final class TestUtil {
 
     public static void resetEnvironment(KubernetesClient kubernetesClient) {
         // Reverse Dependency Deletion
+        deleteResource(kubernetesClient, BucketAccess.class);
         deleteResource(kubernetesClient, AccessKey.class);
         deleteResource(kubernetesClient, Bucket.class);
         deleteResource(kubernetesClient, S3Connection.class);
