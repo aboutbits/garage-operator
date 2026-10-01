@@ -1,0 +1,212 @@
+quarkus:
+  console:
+    color: true
+  log:
+    console:
+      json:
+        enabled: false
+        log-format: ECS
+  kubernetes-client:
+    devservices:
+      enabled: true
+      # To not use our default kubeconfig from the home directory, which could lead to
+      # potential damage if we had the permissions to install the CRD in an existing configured cluster context.
+      # By setting this to true, Quarkus will use a temporary kubeconfig that will be removed after the test.
+      override-kubeconfig: true
+      flavor: k3s
+      # See https://github.com/dajudge/kindcontainer/blob/master/k8s-versions.json
+      api-version: 1.34.1
+  live-reload:
+    instrumentation: true
+  micrometer:
+    enabled: true
+  operator-sdk:
+    crd:
+      generate: true
+      # NOTE that this option is only considered when *not* in production mode
+      # as applying the CRD to a production cluster could be dangerous if done automatically.
+      apply: true
+    # Whether controllers should only process events if the associated resource generation
+    # has increased since the last reconciliation, otherwise will process all events.
+    generation-aware: true
+  test:
+    hang-detection-timeout: PT1M
+
+  # Config for the generated Helm chart #
+  # Container Image config for Kubernetes Helm #
+  container-image:
+    registry: ghcr.io
+    group: aboutbits
+    name: garage-operator
+    tag: ${quarkus.application.version}
+  helm:
+    app-version: ${quarkus.application.version}
+    type: application
+    name: ${quarkus.kubernetes.name}
+    description: AboutBits Garage Operator Helm Chart
+    # Keep the map-system-properties flag below on false, else it will map all ${ENV_VARS} we define in the application.yml or application-prod.yml files.
+    # In Kubernetes the env entries take precedence over envFrom entries
+    map-system-properties: false
+    home: https://github.com/aboutbits/garage-operator
+    sources:
+      - https://github.com/aboutbits/garage-operator
+    annotations:
+      "catalog.cattle.io/os": linux
+    keywords:
+      - aboutbits
+      - s3
+      - garage
+      - operator
+    maintainers:
+      "AboutBits":
+        name: AboutBits
+        email: info@aboutbits.it
+        url: https://aboutbits.it/
+    create-tar-file: true
+    extension: tgz
+    values:
+      replicas:
+        property: replicas
+        value-as-int: 1
+        description: Keep this at 1. The operator has no leader election, so more replicas would reconcile the same resources concurrently.
+        paths:
+          - (kind == Deployment).spec.replicas
+      image-pull-policy:
+        property: imagePullPolicy
+        value: IfNotPresent
+        paths:
+          - (kind == Deployment).spec.template.spec.containers.(name == ${quarkus.kubernetes.name}).imagePullPolicy
+      image-pull-secrets:
+        property: imagePullSecrets
+        paths:
+          - (kind == Deployment).spec.template.spec.imagePullSecrets
+        expression: "{{- toYaml (.Values.app.imagePullSecrets | default list) | nindent 8 }}"
+      resource-requests-cpu:
+        property: resources.requests.cpu
+        value: ${quarkus.kubernetes.resources.requests.cpu}
+        paths:
+          - (kind == Deployment).spec.template.spec.containers.(name == ${quarkus.kubernetes.name}).resources.requests.cpu
+      resource-requests-memory:
+        property: resources.requests.memory
+        value: ${quarkus.kubernetes.resources.requests.memory}
+        paths:
+          - (kind == Deployment).spec.template.spec.containers.(name == ${quarkus.kubernetes.name}).resources.requests.memory
+      resource-limits-memory:
+        property: resources.limits.memory
+        value: ${quarkus.kubernetes.resources.limits.memory}
+        paths:
+          - (kind == Deployment).spec.template.spec.containers.(name == ${quarkus.kubernetes.name}).resources.limits.memory
+      affinity:
+        property: affinity
+        value-as-map: {}
+        paths:
+          - (kind == Deployment).spec.template.spec.affinity
+        description: Kubernetes affinity configuration for Pod scheduling
+      volumes:
+        property: volumes
+        paths:
+          - (kind == Deployment).spec.template.spec.volumes
+        expression: "{{- toYaml (.Values.app.volumes | default list) | nindent 8 }}"
+      volume-mounts:
+        property: volumeMounts
+        paths:
+          - (kind == Deployment).spec.template.spec.containers.(name == ${quarkus.kubernetes.name}).volumeMounts
+        expression: "{{- toYaml (.Values.app.volumeMounts | default list) | nindent 12 }}"
+      console-color:
+        property: envs.QUARKUS_CONSOLE_COLOR
+        value-as-bool: ${quarkus.console.color}
+        description: If color should be enabled or disabled. If this is unset, then an attempt will be made to guess if the terminal supports color.
+      log-console-json-enabled:
+        property: envs.QUARKUS_LOG_CONSOLE_JSON_ENABLED
+        value-as-bool: ${quarkus.log.console.json.enabled}
+        description: Determine whether to enable the JSON console formatting extension, which disables "normal" console formatting.
+      log-console-json-log-format:
+        property: envs.QUARKUS_LOG_CONSOLE_JSON_LOG_FORMAT
+        value: ${quarkus.log.console.json.log-format}
+        description: Specify the format of the produced JSON. Supported values are "DEFAULT", "ECS", and "GCP".
+    values-schema:
+      properties:
+        # The type must be set explicitly for every non-scalar value, because the generated
+        # schema otherwise falls back to `string`.
+        #
+        # A value that `src/main/helm/values.yaml` provides also loses the `description` of its
+        # `quarkus.helm.values` entry, so the description belongs here instead.
+        "affinity":
+          name: app.affinity
+          type: object
+        "imagePullSecrets":
+          name: app.imagePullSecrets
+          type: array
+          description: Kubernetes image pull secrets to use if the OCI image is hosted on a private registry
+        "volumes":
+          name: app.volumes
+          type: array
+          description: Additional volumes for the operator Pod, for example a Secret volume or a Secrets Store CSI volume
+        "volumeMounts":
+          name: app.volumeMounts
+          type: array
+          description: Additional volume mounts for the operator container
+    expressions:
+      release-name-labels:
+        expression: "{{ .Release.Name }}"
+        path: metadata.labels.'app.kubernetes.io/name'
+      release-name-service-selector:
+        expression: "{{ .Release.Name }}"
+        path: (kind == Service).spec.selector.'app.kubernetes.io/name'
+      release-name-deployment-match-labels:
+        expression: "{{ .Release.Name }}"
+        path: (kind == Deployment).spec.selector.matchLabels.'app.kubernetes.io/name'
+      release-name-deployment-labels:
+        expression: "{{ .Release.Name }}"
+        path: (kind == Deployment).spec.template.metadata.labels.'app.kubernetes.io/name'
+      affinity:
+        expression: "{{- toYaml (.Values.app.affinity | default dict) | nindent 8 }}"
+        path: (kind == Deployment).spec.template.spec.affinity
+  kubernetes:
+    name: garage-operator
+    version: ${quarkus.application.version}
+    add-version-to-label-selectors: false
+    image-pull-policy: IfNotPresent
+    replicas: 1
+    # There is no leader election, so two operator pods must never run at the same time — a
+    # rolling update would overlap them, and both would reconcile the same resources. Recreate
+    # stops the old pod before the new one starts.
+    strategy: Recreate
+    annotations:
+      "app.kubernetes.io/version": ${quarkus.application.version}
+    resources:
+      requests:
+        cpu: 50m
+        memory: 300Mi
+      limits:
+        memory: 512Mi
+    prometheus:
+      generate-service-monitor: false
+    startup-probe:
+      http-action-port-name: http
+      initial-delay: PT2S
+      period: PT10S
+      timeout: PT3S
+      success-threshold: 1
+      failure-threshold: 3
+    readiness-probe:
+      http-action-port-name: http
+      initial-delay: PT0S
+      period: PT5S
+      timeout: PT3S
+      success-threshold: 1
+      failure-threshold: 3
+    liveness-probe:
+      http-action-port-name: http
+      initial-delay: PT5S
+      period: PT10S
+      timeout: PT3S
+      success-threshold: 1
+      failure-threshold: 3
+    env:
+      fields:
+        KUBERNETES_NODE_NAME: spec.nodeName
+      vars:
+        QUARKUS_CONSOLE_COLOR: ${quarkus.console.color}
+        QUARKUS_LOG_CONSOLE_JSON_ENABLED: ${quarkus.log.console.json.enabled}
+        QUARKUS_LOG_CONSOLE_JSON_LOG_FORMAT: ${quarkus.log.console.json.log-format}
