@@ -1,0 +1,17 @@
+services:
+  garage:
+    # Keep this in sync with the image the AboutBits Garage Helm chart deploys.
+    # https://github.com/aboutbits/helm-garage
+    image: dxflrs/garage:v2.3.0
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage:rw,async,noatime
+    ports:
+      # S3 API
+      - "3900"
+      # Admin API
+      - "3903"
+    labels:
+      io.quarkus.devservices.compose.config_map.port.3900: garage.s3.port
+      io.quarkus.devservices.compose.config_map.port.3903: garage.admin.port

@@ -1,0 +1,29 @@
+# Garage configuration used by the Compose Dev Service that backs the test suite.
+#
+# It mirrors what the AboutBits Garage Helm chart deploys — a single node with a replication
+# factor of 1 and the Admin API enabled — so the operator is exercised against the same shape of
+# cluster it manages in production.
+#
+# Note that no cluster layout is configured here. A freshly started Garage node has no layout and
+# serves no S3 traffic until one is assigned, which is exactly the bootstrap situation the
+# GarageCluster reconciler is responsible for.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# Test-only credentials. Never reuse these anywhere else.
+rpc_secret = "3e0d0b0a3d4b2a5c6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b9a"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "test-admin-token"
