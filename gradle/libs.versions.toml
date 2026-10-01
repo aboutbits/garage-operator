@@ -1,0 +1,89 @@
+[versions]
+## AboutBits Libraries ##
+checkstyleConfig = "2.0.0-RC2"
+
+# Axion Release Plugin #
+axionReleasePlugin = "1.21.1"
+
+## Libraries ##
+jSpecify = "1.0.0"
+lombok = "1.18.46"
+quarkiverse-helm = "1.4.0"
+
+## Testing ##
+assertj = "3.27.7"
+awsSdk = "2.55.3"
+checkstyle = "13.4.1"
+datafaker = "2.5.4"
+errorProne = "2.49.0"
+errorPronePlugin = "5.1.0"
+nullAway = "0.13.4"
+
+[plugins]
+# https://github.com/allegro/axion-release-plugin
+# https://axion-release-plugin.readthedocs.io/
+axionReleasePlugin = { id = "pl.allegro.tech.build.axion-release", version.ref = "axionReleasePlugin" }
+
+# https://github.com/tbroyer/gradle-errorprone-plugin
+# https://mvnrepository.com/artifact/net.ltgt.errorprone/net.ltgt.errorprone.gradle.plugin
+errorPronePlugin = { id = "net.ltgt.errorprone", version.ref = "errorPronePlugin" }
+
+[libraries]
+## AboutBits Libraries ##
+
+# https://github.com/aboutbits/java-checkstyle-config
+checkstyleConfig = { group = "it.aboutbits", name = "java-checkstyle-config", version.ref = "checkstyleConfig" }
+
+## Libraries ##
+
+# jSpecify #
+# https://jspecify.dev/
+# https://github.com/jspecify/jspecify
+# https://mvnrepository.com/artifact/org.jspecify/jspecify
+jspecify = { group = "org.jspecify", name = "jspecify", version.ref = "jSpecify" }
+
+# Lombok #
+# https://projectlombok.org/
+# https://github.com/projectlombok/lombok
+# https://mvnrepository.com/artifact/org.projectlombok/lombok
+lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
+
+# Quarkiverse Helm #
+# https://docs.quarkiverse.io/quarkus-helm/dev/
+# https://github.com/quarkiverse/quarkus-helm
+# https://mvnrepository.com/artifact/io.quarkiverse.helm/quarkus-helm
+quarkiverse-helm = { group = "io.quarkiverse.helm", name = "quarkus-helm", version.ref = "quarkiverse-helm" }
+
+## Testing ##
+
+# https://assertj.github.io/
+# https://github.com/assertj/assertj
+# https://mvnrepository.com/artifact/org.assertj/assertj-core
+assertj = { group = "org.assertj", name = "assertj-core", version.ref = "assertj" }
+
+# AWS SDK for Java v2 #
+# Test-only: used to prove that the credentials the operator writes actually work against the
+# S3 API of the backend, not just that the Admin API reports a grant.
+# https://github.com/aws/aws-sdk-java-v2
+# https://mvnrepository.com/artifact/software.amazon.awssdk/s3
+awsSdk-s3 = { group = "software.amazon.awssdk", name = "s3", version.ref = "awsSdk" }
+awsSdk-urlConnectionClient = { group = "software.amazon.awssdk", name = "url-connection-client", version.ref = "awsSdk" }
+
+# https://checkstyle.org/
+# https://github.com/checkstyle/checkstyle
+# https://mvnrepository.com/artifact/com.puppycrawl.tools/checkstyle
+checkstyle = { group = "com.puppycrawl.tools", name = "checkstyle", version.ref = "checkstyle" }
+
+# https://datafaker.net/
+# https://github.com/datafaker-net/datafaker
+# https://mvnrepository.com/artifact/net.datafaker/datafaker
+datafaker = { group = "net.datafaker", name = "datafaker", version.ref = "datafaker" }
+
+# https://errorprone.info/
+# https://github.com/google/error-prone
+# https://mvnrepository.com/artifact/com.google.errorprone/error_prone_core
+errorProne = { group = "com.google.errorprone", name = "error_prone_core", version.ref = "errorProne" }
+
+# https://github.com/uber/NullAway
+# https://mvnrepository.com/artifact/com.uber.nullaway/nullaway
+nullAway = { group = "com.uber.nullaway", name = "nullaway", version.ref = "nullAway" }
