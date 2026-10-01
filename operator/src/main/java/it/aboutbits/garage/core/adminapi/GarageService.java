@@ -1,6 +1,8 @@
 package it.aboutbits.garage.core.adminapi;
 
+import it.aboutbits.garage.core.adminapi.dto.ApiBucketKeyPerm;
 import it.aboutbits.garage.core.adminapi.dto.ApiBucketQuotas;
+import it.aboutbits.garage.core.adminapi.dto.BucketKeyPermChangeRequest;
 import it.aboutbits.garage.core.adminapi.dto.CreateBucketRequest;
 import it.aboutbits.garage.core.adminapi.dto.GetBucketInfoResponse;
 import it.aboutbits.garage.core.adminapi.dto.GetKeyInfoResponse;
@@ -208,6 +210,99 @@ public class GarageService {
     ) {
         garageAdminClientFactory.create(s3Connection)
                 .deleteKey(accessKeyId);
+    }
+
+    public BucketPermissions getBucketKeyPermissions(
+            S3Connection s3Connection,
+            String bucketId,
+            String accessKeyId
+    ) {
+        var bucketInfo = garageAdminClientFactory.create(s3Connection)
+                .getBucketInfo(bucketId);
+
+        return permissionsOf(bucketInfo, accessKeyId);
+    }
+
+    public BucketPermissions setBucketKeyPermissions(
+            S3Connection s3Connection,
+            String bucketId,
+            String accessKeyId,
+            BucketPermissions permissions
+    ) {
+        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+
+        // Allow and deny are complements, so one call of each reaches the desired state without a diff.
+        var toAllow = new ApiBucketKeyPerm(
+                permissions.read(),
+                permissions.write(),
+                permissions.owner()
+        );
+        var toDeny = new ApiBucketKeyPerm(
+                !permissions.read(),
+                !permissions.write(),
+                !permissions.owner()
+        );
+
+        if (toDeny.isEmpty()) {
+            return permissionsOf(
+                    garageAdminApi.allowBucketKey(new BucketKeyPermChangeRequest(bucketId, accessKeyId, toAllow)),
+                    accessKeyId
+            );
+        }
+
+        if (!toAllow.isEmpty()) {
+            garageAdminApi.allowBucketKey(new BucketKeyPermChangeRequest(bucketId, accessKeyId, toAllow));
+        }
+
+        return permissionsOf(
+                garageAdminApi.denyBucketKey(new BucketKeyPermChangeRequest(bucketId, accessKeyId, toDeny)),
+                accessKeyId
+        );
+    }
+
+    public void revokeBucketKey(
+            S3Connection s3Connection,
+            String bucketId,
+            String accessKeyId
+    ) {
+        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+
+        // Checked through the listing rather than reading a failed call as "already gone".
+        var bucketExists = garageAdminApi.listBuckets().stream()
+                .anyMatch(bucket -> bucket.id().equals(bucketId));
+
+        if (!bucketExists) {
+            return;
+        }
+
+        var bucketInfo = garageAdminApi.getBucketInfo(bucketId);
+
+        if (permissionsOf(bucketInfo, accessKeyId).isEmpty()) {
+            return;
+        }
+
+        garageAdminApi.denyBucketKey(
+                new BucketKeyPermChangeRequest(
+                        bucketId,
+                        accessKeyId,
+                        new ApiBucketKeyPerm(true, true, true)
+                )
+        );
+    }
+
+    private BucketPermissions permissionsOf(
+            GetBucketInfoResponse bucketInfo,
+            String accessKeyId
+    ) {
+        return bucketInfo.keys().stream()
+                .filter(key -> key.accessKeyId().equals(accessKeyId))
+                .findFirst()
+                .map(key -> new BucketPermissions(
+                        key.permissions().read(),
+                        key.permissions().write(),
+                        key.permissions().owner()
+                ))
+                .orElse(BucketPermissions.NONE);
     }
 
     private AccessKeyInfo toAccessKeyInfo(GetKeyInfoResponse response) {
