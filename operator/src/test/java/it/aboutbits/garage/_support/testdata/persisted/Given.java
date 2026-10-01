@@ -1,6 +1,8 @@
 package it.aboutbits.garage._support.testdata.persisted;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
+import it.aboutbits.garage._support.testdata.persisted.creator.AccessKeyCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.BucketCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.S3ConnectionCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.SecretKeyRefCreate;
@@ -75,6 +77,22 @@ public class Given {
                     given,
                     kubernetesClient,
                     garageConnectionDetails()
+            );
+        }
+
+        public AccessKeyCreate accessKey() {
+            return new AccessKeyCreate(
+                    numberOfItems,
+                    given,
+                    kubernetesClient
+            );
+        }
+
+        public BucketCreate bucket() {
+            return new BucketCreate(
+                    numberOfItems,
+                    given,
+                    kubernetesClient
             );
         }
 

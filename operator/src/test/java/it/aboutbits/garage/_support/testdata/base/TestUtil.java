@@ -2,6 +2,8 @@ package it.aboutbits.garage._support.testdata.base;
 
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import it.aboutbits.garage.crd.accesskey.AccessKey;
+import it.aboutbits.garage.crd.bucket.Bucket;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import org.jspecify.annotations.NullMarked;
@@ -14,6 +16,8 @@ import static org.awaitility.Awaitility.await;
 public final class TestUtil {
     public static void resetEnvironment(KubernetesClient kubernetesClient) {
         // Reverse Dependency Deletion
+        deleteResource(kubernetesClient, AccessKey.class);
+        deleteResource(kubernetesClient, Bucket.class);
         deleteResource(kubernetesClient, S3Connection.class);
         deleteResource(kubernetesClient, GarageCluster.class);
     }
