@@ -50,7 +50,10 @@ class HelmTest {
     /// Singular name (used for the reconciler's role binding) to plural name (used for the CRD
     /// file). Spelled out rather than derived, because `bucketaccess` → `bucketaccesses` is not a
     /// plain `+ "s"`.
-    private static final Map<String, String> CRD_NAMES = Map.of();
+    private static final Map<String, String> CRD_NAMES = Map.of(
+            "garagecluster", "garageclusters",
+            "s3connection", "s3connections"
+    );
 
     private final String chartName;
     /// Dekorate uses this value for the Deployment name and for the container name.
@@ -160,12 +163,17 @@ class HelmTest {
         }
 
         // ./templates/
+        assertThat(chartPath.resolve("templates/clusterrole.yaml")).exists();
+        assertThat(chartPath.resolve("templates/clusterrolebinding.yaml")).exists();
         assertThat(chartPath.resolve("templates/deployment.yaml")).exists();
         assertThat(chartPath.resolve("templates/rolebinding.yaml")).exists();
         assertThat(chartPath.resolve("templates/service.yaml")).exists();
         assertThat(chartPath.resolve("templates/serviceaccount.yaml")).exists();
         // `quarkus.operator-sdk.crd.validate: false`: its ClusterRole has a fixed name that another QOSDK chart also uses.
         assertThat(chartPath.resolve("templates/validating-clusterrolebinding.yaml")).doesNotExist();
+        assertThat(chartPath.resolve("templates/clusterrole.yaml"))
+                .content()
+                .doesNotContain("josdk-crd-validating-cluster-role");
 
         // The indent of each expression has to match the depth of its field in the Deployment.
         // A wrong `nindent` produces invalid YAML as soon as a user sets the value.

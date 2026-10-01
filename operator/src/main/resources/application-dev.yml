@@ -2,3 +2,10 @@ quarkus:
   operator-sdk:
     activate-leader-election-for-profiles:
       - dev
+  compose:
+    devservices:
+      files: src/main/docker/compose-devservices.yml
+
+garage:
+  admin:
+    token: test-admin-token
