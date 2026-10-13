@@ -25,10 +25,10 @@ import java.util.stream.Collectors;
 ///
 /// ### Behavior
 ///
-/// - If `input` is **blank** (the default), the `"hostname"` format
+/// - If `input` is **blank** (the default), the name `pattern`
 ///   is applied to **all** string properties of the annotated class.
 /// - If `input` contains a **comma-separated list** of field names,
-///   the format is applied **only** to the specified properties.
+///   the name `pattern` is applied **only** to the specified properties.
 ///
 /// ### Usage examples
 ///
@@ -36,9 +36,9 @@ import java.util.stream.Collectors;
 ///
 /// ```java
 /// @SchemaCustomizer(KubernetesNameCustomizer.class)
-/// public class ResourceRef {
-///     private String name = ""; // gets pattern: Kubernetes name regex
+/// public class ServiceRef {
 ///     private String namespace; // gets pattern: Kubernetes name regex
+///     private String name = ""; // gets pattern: Kubernetes name regex
 /// }
 /// ```
 ///
@@ -46,10 +46,10 @@ import java.util.stream.Collectors;
 ///
 /// ```java
 /// @SchemaCustomizer(value = KubernetesNameCustomizer.class, input = "name,anotherName")
-/// public class ResourceRef {
+/// public class ServiceRef {
+///     private String namespace;        // unchanged
 ///     private String name = "";        // gets pattern: Kubernetes name regex
 ///     private String anotherName = ""; // gets pattern: Kubernetes name regex
-///     private String namespace;        // unchanged
 /// }
 /// ```
 ///

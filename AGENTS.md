@@ -38,7 +38,7 @@ When in doubt about a pattern, look there first.
 - **Stack**: Java 25, Quarkus, the Quarkus Operator SDK and the fabric8 Kubernetes client.
 - **Generated artifacts**: the CRDs and the Helm chart are generated from the code at build time, into
   `operator/build/kubernetes` and `operator/build/helm`. Change the Java classes or `application.yml`, never the output.
-- **Tests**: `@QuarkusTest` integration tests against a k3s cluster and a real Garage node, both provided by Quarkus
+- **Tests**: `@QuarkusTest` integration tests against a K3s cluster and a real Garage node, both provided by Quarkus
   Dev Services, so Docker is required. Prefer a test against the real Garage over a mock: what matters is how the
   Admin API actually behaves.
 
@@ -47,21 +47,20 @@ When in doubt about a pattern, look there first.
 - **Code style**: the shared AboutBits Checkstyle config, and JSpecify `@NullMarked` checked by NullAway.
 - **Comments**: comment only what the code cannot say — a trap, a quirk of the backend, a contract. Do not restate the
   code. Keep the density of the PostgreSQL operator.
-- **Docs**: a change in behavior updates the matching page in `docs/`, and the `readme.md` if an administrator needs
+- **Docs**: a change in behavior updates the matching page in `docs/`, and the `README.md` if an administrator needs
   to know about it.
+- **Namespace and name**: `namespace` always comes before `name`, in YAML, in code lists and in comments.
 
 ## 🛠️ Operational Commands
 
 The [`Makefile`](./Makefile) holds the common commands:
 
 - **Build**: `make install`
-- **Run in dev mode**, against a throwaway k3s cluster and Garage node: `make run`
+- **Run in dev mode**, against a throwaway K3s cluster and Garage node: `make run`
 - **Run the tests**: `make test`
 - **Run Checkstyle**: `./gradlew checkstyleMain checkstyleTest`. It needs GitHub Packages credentials, see the
-  [`readme.md`](./readme.md).
+  [`README.md`](./README.md).
 - **Lint Markdown**: `make lint`
-
-The Helm chart installation test fails against Helm 4; CI runs Helm 3.
 
 ## 🧩 Automation Skills
 

@@ -1,8 +1,9 @@
 package it.aboutbits.garage.core;
 
 import io.fabric8.crdv2.generator.v1.SchemaCustomizer;
-import io.fabric8.generator.annotation.Max;
+import io.fabric8.generator.annotation.Pattern;
 import io.fabric8.generator.annotation.Required;
+import io.fabric8.generator.annotation.Size;
 import io.fabric8.generator.annotation.ValidationRule;
 import it.aboutbits.garage.core.schema_customizer.KubernetesNameCustomizer;
 import lombok.Getter;
@@ -28,20 +29,25 @@ import org.jspecify.annotations.Nullable;
 /// | `null` (omitted)  | the namespace of the CR that owns this reference    |
 @Getter
 @Setter
-// Scoped to the two fields that actually hold Kubernetes object names rather than left blank
-// (which would mean "every string property"), because this customizer is inherited by subclasses
-// such as SecretKeyRef, whose additional fields follow different naming rules.
-@SchemaCustomizer(value = KubernetesNameCustomizer.class, input = "name,namespace")
+// Scoped to `namespace` rather than left blank (which would mean "every string property"): a
+// namespace is a DNS label, but most object names, such as the name of a Secret, are DNS
+// subdomains. The customizer is also inherited by subclasses such as SecretKeyRef, whose
+// additional fields follow different naming rules.
+@SchemaCustomizer(value = KubernetesNameCustomizer.class, input = "namespace")
 @NullMarked
 public class ResourceRef {
+    /// RFC 1123 DNS subdomain, see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
+    private static final String DNS_SUBDOMAIN_PATTERN =
+            "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$";
+
     /// The namespace of the referenced Kubernetes resource.
     /// If `null`, defaults to the namespace of the CR that defines this reference.
     @io.fabric8.generator.annotation.Nullable
-    @Max(63)
     private @Nullable String namespace;
 
     @Required
-    @Max(63)
+    @Size(max = 253)
+    @Pattern(DNS_SUBDOMAIN_PATTERN)
     @ValidationRule(
             value = "self.trim().size() > 0",
             message = "The name must not be empty."

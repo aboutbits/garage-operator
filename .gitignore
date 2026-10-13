@@ -1,5 +1,5 @@
 ### Garage Operator ###
-config/
+/config/
 # The kubectl cache of the Dev Services cluster
 operator/.kube/
 .rumdl_cache/

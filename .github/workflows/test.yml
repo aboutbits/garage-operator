@@ -3,13 +3,16 @@ name: Tests
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: aboutbits/github-actions-java/setup-with-gradle@v4
         with:
           java-version: 25

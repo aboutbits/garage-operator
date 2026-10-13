@@ -1,0 +1,10 @@
+The AboutBits Garage Operator {{ .Chart.AppVersion }} is installed as the release {{ .Release.Name }} in the namespace {{ .Release.Namespace }}.
+
+Check that the operator is running:
+
+  kubectl get pods --namespace {{ .Release.Namespace }} --selector app.kubernetes.io/name={{ .Release.Name }}
+
+Helm installs the Custom Resource Definitions (CRDs) only on the first install and never upgrades them.
+Before you upgrade the chart, apply the CRDs of the new release, as described in its release notes:
+
+  https://github.com/aboutbits/garage-operator/releases

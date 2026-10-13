@@ -8,10 +8,10 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 
 | Component      | Supported Versions                        |
 |----------------|-------------------------------------------|
-| **Garage**     | 2.x (Admin API v2), tested against v2.3.0 |
-| **Kubernetes** | 1.29+                                     |
+| **Garage**     | 2.x (Admin API v2), tested against v2.4.1 |
+| **Kubernetes** | 1.34+                                     |
 
-> **Note:** Kubernetes 1.29+ is required due to the use of CRD CEL validations (GA in 1.29, Beta in 1.25).
+> **Note:** Kubernetes 1.34+ is required. The tests run against K3s 1.34, and older Kubernetes versions are end-of-life. The Helm chart refuses to install on an older cluster.
 
 ## Contribute
 
@@ -61,7 +61,7 @@ git config core.hooksPath .githooks
 
 ### Development
 
-You can run the operator in dev mode, against a throwaway k3s cluster, using:
+You can run the operator in dev mode, against a throwaway K3s cluster, using:
 
 ```bash
 make run
@@ -80,9 +80,6 @@ make test
 
 ./gradlew :operator:test
 ```
-
-The Helm chart installation test currently fails against **Helm 4**, whose server-side apply conflicts with the CRDs the fabric8 client already applied in test mode; CI runs Helm 3. The same is true of the sibling
-[PostgreSQL Operator](https://github.com/aboutbits/postgresql-operator).
 
 ## Information
 

@@ -1,5 +1,6 @@
 package it.aboutbits.garage.helm;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.fabric8.kubernetes.api.model.ConfigBuilder;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
@@ -7,7 +8,6 @@ import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeMount;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.utils.KubernetesSerialization;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.common.process.ProcessBuilder;
@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,7 +38,6 @@ import static org.awaitility.Awaitility.await;
 @NullMarked
 class HelmTest {
     private static final String ENV_VAR_KUBECONFIG = "KUBECONFIG";
-    private static final KubernetesSerialization KUBERNETES_SERIALIZATION = new KubernetesSerialization();
 
     /// The Pod and Container list fields that the chart exposes as free-form Helm values.
     private static final List<String> LIST_VALUES = List.of(
@@ -81,21 +81,24 @@ class HelmTest {
                 .withFailMessage("Helm chart not found at %s. Ensure that the chart is generated before running this test.", chartPath)
                 .exists();
 
+        var serialization = kubernetesClient.getKubernetesSerialization();
+
         // 1. Verify files exist and contain expected data
         // ./Chart.yaml
-        @SuppressWarnings("unchecked")
-        Map<String, Object> chartMetadata = KUBERNETES_SERIALIZATION.unmarshal(
+        var chartMetadata = serialization.unmarshal(
                 Files.newInputStream(chartPath.resolve("Chart.yaml")),
-                Map.class
+                new TypeReference<Map<String, Object>>() {
+                }
         );
 
         assertThat(chartMetadata.get("name")).isEqualTo(chartName);
+        assertThat(chartMetadata.get("kubeVersion")).isEqualTo(">=1.34.0-0");
 
         // ./values.yaml
-        @SuppressWarnings("unchecked")
-        Map<String, Object> values = KUBERNETES_SERIALIZATION.unmarshal(
+        var values = serialization.unmarshal(
                 Files.newInputStream(chartPath.resolve("values.yaml")),
-                Map.class
+                new TypeReference<Map<String, Object>>() {
+                }
         );
 
         assertThat(values).containsKey(rootValuesAlias);
@@ -121,7 +124,7 @@ class HelmTest {
         // ./values.schema.json
         // The type must be declared for every list value, otherwise the generated schema
         // falls back to `string` and `helm install` rejects a list.
-        var valuesSchema = KUBERNETES_SERIALIZATION.unmarshal(
+        var valuesSchema = serialization.unmarshal(
                 Files.newInputStream(chartPath.resolve("values.schema.json")),
                 JsonNode.class
         );
@@ -186,9 +189,14 @@ class HelmTest {
             };
             var installOutput = new StringBuilder();
 
+            // The test-mode operator already applied the CRDs with the field manager `fabric8-kubernetes-client`.
+            // Helm 4 installs CRDs with server-side apply, which conflicts with that field manager on `.spec.versions`.
+            // Helm 3 skipped a CRD that already existed, so `--skip-crds` keeps that behavior on both versions.
             ProcessBuilder.newBuilder(
                             "helm",
-                            "install", releaseName, chartPath.toAbsolutePath().toString(), "--set", rootValuesAlias + ".image=garage-operator:test"
+                            "install", releaseName, chartPath.toAbsolutePath().toString(),
+                            "--skip-crds",
+                            "--set", rootValuesAlias + ".image=garage-operator:test"
                     ).environment(Map.of(
                             ENV_VAR_KUBECONFIG,
                             kubeConfigPath.toAbsolutePath().toString()
@@ -206,6 +214,9 @@ class HelmTest {
             assertThat(installExitCode)
                     .withFailMessage("Helm install failed with output:\n" + installOutput)
                     .isZero();
+
+            // The chart's own `NOTES.txt` replaces the generic one of quarkus-helm.
+            assertThat(installOutput.toString()).contains("The AboutBits Garage Operator");
 
             try {
                 // 4. Verify that the deployment is created in Kubernetes
@@ -275,56 +286,16 @@ class HelmTest {
     @DisplayName("When the chart is rendered with volumes, the deployment should mount them")
     void helmTemplate_rendersVolumes() throws IOException {
         // given
-        var chartPath = chartPath();
-
-        assertThat(chartPath)
-                .withFailMessage("Helm chart not found at %s. Ensure that the chart is generated before running this test.", chartPath)
-                .exists();
-
         var valuesPath = createTempValuesWithVolumes();
 
         try {
-            // `helm template` needs no cluster, and it validates the values against values.schema.json.
-            var holder = new Object() {
-                int exitCode;
-            };
-            var renderedOutput = new StringBuilder();
-
             // when
-            ProcessBuilder.newBuilder(
-                            "helm",
-                            "template", "volumes-render-test", chartPath.toAbsolutePath().toString(),
-                            "--values", valuesPath.toAbsolutePath().toString()
-                    )
-                    .exitCodeChecker(ec -> {
-                        holder.exitCode = ec;
-                        return true;
-                    })
-                    .error().consumeLinesWith(8192, log::error)
-                    .output()
-                    .consumeLinesWith(65536, line -> renderedOutput.append(line).append(System.lineSeparator()))
-                    .run();
+            var deployment = renderDeployment(
+                    "volumes-render-test",
+                    "--values", valuesPath.toAbsolutePath().toString()
+            );
 
             // then
-            assertThat(holder.exitCode)
-                    .withFailMessage("Helm template failed, see the logged error output")
-                    .isZero();
-
-            var deployments = kubernetesClient.load(new ByteArrayInputStream(
-                            renderedOutput.toString().getBytes(StandardCharsets.UTF_8)
-                    ))
-                    .items()
-                    .stream()
-                    .filter(Deployment.class::isInstance)
-                    .map(Deployment.class::cast)
-                    .toList();
-
-            assertThat(deployments)
-                    .withFailMessage("The rendered chart must contain exactly one Deployment:%n%s", renderedOutput)
-                    .hasSize(1);
-
-            var deployment = deployments.getFirst();
-
             // The baseline `kubernetes.yml` must name the Deployment `quarkus.kubernetes.name`.
             // Dekorate keeps a different name as a second Deployment.
             assertThat(deployment.getMetadata().getName()).isEqualTo(kubernetesName);
@@ -376,6 +347,71 @@ class HelmTest {
         } finally {
             Files.deleteIfExists(valuesPath);
         }
+    }
+
+    @Test
+    @DisplayName("When the chart is rendered with zero replicas, the deployment should have zero replicas")
+    void helmTemplate_rendersReplicas() {
+        // when
+        var defaultDeployment = renderDeployment("replicas-default-render-test");
+        var stoppedDeployment = renderDeployment(
+                "replicas-render-test",
+                "--set", rootValuesAlias + ".replicas=0"
+        );
+
+        // then
+        assertThat(defaultDeployment.getSpec().getReplicas()).isEqualTo(1);
+        assertThat(stoppedDeployment.getSpec().getReplicas()).isZero();
+    }
+
+    /// Renders the chart with `helm template` and returns its only Deployment.
+    /// `helm template` needs no cluster, and it validates the values against values.schema.json.
+    private Deployment renderDeployment(
+            String releaseName,
+            String... args
+    ) {
+        var chartPath = chartPath();
+
+        assertThat(chartPath)
+                .withFailMessage("Helm chart not found at %s. Ensure that the chart is generated before running this test.", chartPath)
+                .exists();
+
+        var command = new ArrayList<>(List.of("template", releaseName, chartPath.toAbsolutePath().toString()));
+        command.addAll(List.of(args));
+
+        var holder = new Object() {
+            int exitCode;
+        };
+        var renderedOutput = new StringBuilder();
+
+        ProcessBuilder.newBuilder("helm", command)
+                .exitCodeChecker(ec -> {
+                    holder.exitCode = ec;
+                    return true;
+                })
+                .error().consumeLinesWith(8192, log::error)
+                .output()
+                .consumeLinesWith(65536, line -> renderedOutput.append(line).append(System.lineSeparator()))
+                .run();
+
+        assertThat(holder.exitCode)
+                .withFailMessage("Helm template failed, see the logged error output")
+                .isZero();
+
+        var deployments = kubernetesClient.load(new ByteArrayInputStream(
+                        renderedOutput.toString().getBytes(StandardCharsets.UTF_8)
+                ))
+                .items()
+                .stream()
+                .filter(Deployment.class::isInstance)
+                .map(Deployment.class::cast)
+                .toList();
+
+        assertThat(deployments)
+                .withFailMessage("The rendered chart must contain exactly one Deployment:%n%s", renderedOutput)
+                .hasSize(1);
+
+        return deployments.getFirst();
     }
 
     /// The chart is generated by the quarkus-helm extension in the build directory.

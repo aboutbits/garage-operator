@@ -42,6 +42,7 @@ quarkus:
   helm:
     app-version: ${quarkus.application.version}
     type: application
+    kube-version: ">=1.34.0-0"
     name: ${quarkus.kubernetes.name}
     description: AboutBits Garage Operator Helm Chart
     # Keep the map-system-properties flag below on false, else it will map all ${ENV_VARS} we define in the application.yml or application-prod.yml files.
