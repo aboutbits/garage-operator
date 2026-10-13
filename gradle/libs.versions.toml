@@ -7,7 +7,7 @@ axionReleasePlugin = "1.21.1"
 
 ## Libraries ##
 jSpecify = "1.0.0"
-lombok = "1.18.46"
+lombok = "1.18.48"
 quarkiverse-helm = "1.4.0"
 
 ## Testing ##
