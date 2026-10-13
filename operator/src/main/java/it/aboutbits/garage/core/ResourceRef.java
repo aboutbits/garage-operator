@@ -37,7 +37,7 @@ import org.jspecify.annotations.Nullable;
 @NullMarked
 public class ResourceRef {
     /// RFC 1123 DNS subdomain, see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
-    private static final String DNS_SUBDOMAIN_PATTERN =
+    static final String DNS_SUBDOMAIN_PATTERN =
             "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$";
 
     /// The namespace of the referenced Kubernetes resource.

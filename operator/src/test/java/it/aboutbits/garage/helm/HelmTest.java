@@ -56,18 +56,23 @@ class HelmTest {
     /// Dekorate uses this value for the Deployment name and for the container name.
     private final String kubernetesName;
     private final String rootValuesAlias;
+    /// Without a cluster, `helm template` checks `kubeVersion` against the Kubernetes version that Helm was built
+    /// with, which is older than 1.34 up to Helm 3.18. Render for the version of the Dev Services cluster instead.
+    private final String kubeVersion;
     private final KubernetesClient kubernetesClient;
 
     HelmTest(
             KubernetesClient kubernetesClient,
             @ConfigProperty(name = "quarkus.helm.name") String chartName,
             @ConfigProperty(name = "quarkus.kubernetes.name") String kubernetesName,
-            @ConfigProperty(name = "quarkus.helm.values-root-alias", defaultValue = "app") String rootValuesAlias
+            @ConfigProperty(name = "quarkus.helm.values-root-alias", defaultValue = "app") String rootValuesAlias,
+            @ConfigProperty(name = "quarkus.kubernetes-client.devservices.api-version") String kubeVersion
     ) {
         this.kubernetesClient = kubernetesClient;
         this.chartName = chartName;
         this.kubernetesName = kubernetesName;
         this.rootValuesAlias = rootValuesAlias;
+        this.kubeVersion = kubeVersion;
     }
 
     @SuppressWarnings("checkstyle:MethodLength")
@@ -376,7 +381,10 @@ class HelmTest {
                 .withFailMessage("Helm chart not found at %s. Ensure that the chart is generated before running this test.", chartPath)
                 .exists();
 
-        var command = new ArrayList<>(List.of("template", releaseName, chartPath.toAbsolutePath().toString()));
+        var command = new ArrayList<>(List.of(
+                "template", releaseName, chartPath.toAbsolutePath().toString(),
+                "--kube-version", kubeVersion
+        ));
         command.addAll(List.of(args));
 
         var holder = new Object() {

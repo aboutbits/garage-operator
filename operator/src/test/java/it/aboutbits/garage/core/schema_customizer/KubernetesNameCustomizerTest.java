@@ -6,6 +6,8 @@ import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
 
@@ -100,6 +102,43 @@ class KubernetesNameCustomizerTest {
 
             // then
             assertThat(result).isSameAs(schema).isEqualTo(new JSONSchemaProps());
+        }
+    }
+
+    @Nested
+    class NamePattern {
+        @ParameterizedTest
+        @ValueSource(strings = {"a", "my-name", "1password", "123"})
+        @DisplayName("A valid DNS label should match the pattern")
+        void validName_matches(String value) {
+            // when
+            var matches = value.matches(KUBERNETES_NAME_PATTERN);
+
+            // then
+            assertThat(matches).isTrue();
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "-a", "a-", "A", "a_b", "a.b"})
+        @DisplayName("An invalid DNS label should not match the pattern")
+        void invalidName_doesNotMatch(String value) {
+            // when
+            var matches = value.matches(KUBERNETES_NAME_PATTERN);
+
+            // then
+            assertThat(matches).isFalse();
+        }
+
+        @Test
+        @DisplayName("A DNS label should be at most 63 characters long")
+        void nameLength_isLimitedTo63() {
+            // when
+            var longestMatches = "a".repeat(63).matches(KUBERNETES_NAME_PATTERN);
+            var tooLongMatches = "a".repeat(64).matches(KUBERNETES_NAME_PATTERN);
+
+            // then
+            assertThat(longestMatches).isTrue();
+            assertThat(tooLongMatches).isFalse();
         }
     }
 
