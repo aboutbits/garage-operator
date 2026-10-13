@@ -46,6 +46,15 @@ subprojects {
     apply(plugin = "checkstyle")
     apply(plugin = rootProject.libs.plugins.errorPronePlugin.get().pluginId)
 
+    checkstyle {
+        toolVersion = rootProject.libs.versions.checkstyle.get()
+        isShowViolations = true
+        configFile = rootProject.file("config/checkstyle/checkstyle.xml")
+        configProperties = mapOf(
+            "suppressionFile" to rootProject.file("config/checkstyle/checkstyle-suppressions.xml")
+        )
+    }
+
     java {
         sourceCompatibility = JavaVersion.VERSION_25
         targetCompatibility = JavaVersion.VERSION_25
@@ -146,13 +155,4 @@ tasks.register<Copy>("checkstyleExtractConfig") {
         include("checkstyle.xml", "checkstyle-suppressions.xml")
     }
     into(layout.projectDirectory.dir("config/checkstyle/"))
-}
-
-checkstyle {
-    toolVersion = libs.versions.checkstyle.get()
-    isShowViolations = true
-    configFile = rootProject.file("config/checkstyle/checkstyle.xml")
-    configProperties = mapOf(
-        "suppressionFile" to rootProject.file("config/checkstyle/checkstyle-suppressions.xml")
-    )
 }
