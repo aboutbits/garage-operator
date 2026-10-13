@@ -17,8 +17,10 @@ class CRStatusTest {
         @Test
         @DisplayName("A new status should start out pending without a transition time")
         void newStatus_isPending() {
+            // when
             var status = new CRStatus();
 
+            // then
             assertThat(status.getPhase()).isEqualTo(CRPhase.PENDING);
             assertThat(status.getLastPhaseTransitionTime()).isNull();
         }
@@ -26,10 +28,13 @@ class CRStatusTest {
         @Test
         @DisplayName("Changing the phase should stamp the transition time")
         void phaseChange_stampsTransitionTime() {
+            // given
             var status = new CRStatus();
 
+            // when
             status.updatePhase(CRPhase.READY);
 
+            // then
             assertThat(status.getPhase()).isEqualTo(CRPhase.READY);
             assertThat(status.getLastPhaseTransitionTime()).isNotNull();
         }
@@ -37,24 +42,29 @@ class CRStatusTest {
         @Test
         @DisplayName("Setting the same phase again should not touch the transition time")
         void samePhase_keepsTransitionTime() {
+            // given
             var status = new CRStatus();
 
             status.updatePhase(CRPhase.READY);
 
             var transitionTime = status.getLastPhaseTransitionTime();
 
+            // when
             status.updatePhase(CRPhase.READY);
 
+            // then
             assertThat(status.getLastPhaseTransitionTime()).isEqualTo(transitionTime);
         }
 
         @Test
         @DisplayName("Updating the phase should be chainable with the remaining status setters")
         void updatePhase_isChainable() {
+            // when
             var status = new CRStatus()
                     .updatePhase(CRPhase.ERROR)
                     .setMessage("Something went wrong");
 
+            // then
             assertThat(status.getPhase()).isEqualTo(CRPhase.ERROR);
             assertThat(status.getMessage()).isEqualTo("Something went wrong");
         }

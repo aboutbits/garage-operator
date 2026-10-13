@@ -45,8 +45,14 @@ When in doubt about a pattern, look there first.
 ## 📐 Conventions
 
 - **Code style**: the shared AboutBits Checkstyle config, and JSpecify `@NullMarked` checked by NullAway.
+- **Message keys**: in a log or an error message, the key in the brackets is the path of the field in the CRD for a
+  value from the CRD, for example `spec.name` and `status.phase`. For any other value, it is the name of the variable
+  or of the method, in camelCase, for example `bucketId`. A reference to one object is `key=namespace/name`, for example
+  `resource=%s/%s` and `secret=%s/%s`.
 - **Comments**: comment only what the code cannot say — a trap, a quirk of the backend, a contract. Do not restate the
   code. Keep the density of the PostgreSQL operator.
+- **Test structure**: mark the sections of a test with the comments `// given`, `// when` and `// then`. Add
+  `// precondition` for a check between the setup and the call, with a reason when it is necessary.
 - **Docs**: a change in behavior updates the matching page in `docs/`, and the `README.md` if an administrator needs
   to know about it.
 - **Namespace and name**: `namespace` always comes before `name`, in YAML, in code lists and in comments.

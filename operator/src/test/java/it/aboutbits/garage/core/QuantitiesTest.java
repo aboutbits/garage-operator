@@ -8,7 +8,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 @NullMarked
 class QuantitiesTest {
@@ -25,7 +25,11 @@ class QuantitiesTest {
             String value,
             long expectedBytes
     ) {
-        assertThat(Quantities.toBytes(value, "capacity")).isEqualTo(expectedBytes);
+        // when
+        var bytes = Quantities.toBytes(value, "spec.capacity");
+
+        // then
+        assertThat(bytes).isEqualTo(expectedBytes);
     }
 
     @ParameterizedTest
@@ -33,8 +37,12 @@ class QuantitiesTest {
     @ValueSource(strings = {"twenty", "20Gb", "-1Gi", "0"})
     @DisplayName("An unusable quantity should be rejected, naming the field it came from")
     void invalidQuantity_isRejected(String value) {
-        assertThatThrownBy(() -> Quantities.toBytes(value, "quotas maxSize"))
+        // when
+        var thrown = catchThrowable(() -> Quantities.toBytes(value, "spec.quotas.maxSize"));
+
+        // then
+        assertThat(thrown)
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("quotas maxSize");
+                .hasMessageContaining("[spec.quotas.maxSize=%s]".formatted(value));
     }
 }
