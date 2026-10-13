@@ -1,8 +1,8 @@
 package it.aboutbits.garage.core;
 
+import io.fabric8.generator.annotation.Pattern;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
-import io.fabric8.generator.annotation.ValidationRule;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NullMarked;
@@ -14,9 +14,6 @@ import org.jspecify.annotations.NullMarked;
 public class SecretKeyRef extends ResourceRef {
     @Required
     @Size(max = 253)
-    @ValidationRule(
-            value = "self.trim().size() > 0",
-            message = "The Secret key must not be empty."
-    )
+    @Pattern("^[-._a-zA-Z0-9]+$")
     private String key = "";
 }

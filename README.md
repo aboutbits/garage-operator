@@ -24,6 +24,7 @@ To build the project, the following prerequisites must be met:
 - Java JDK 25 (provisioned automatically by the Gradle toolchain)
 - [Docker](https://www.docker.com/), for the Quarkus Dev Services
 - The [`helm`](https://helm.sh/) CLI, for the Helm chart test
+- [`rumdl`](https://github.com/rvben/rumdl), for `make lint`
 
 ### Setup
 

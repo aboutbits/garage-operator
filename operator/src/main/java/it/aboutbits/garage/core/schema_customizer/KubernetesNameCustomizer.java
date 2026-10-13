@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 /// The pattern enforces:
 /// - Contain at most 63 characters
 /// - Contain only lowercase alphanumeric characters or '-'
-/// - Start with an alphabetic character
+/// - Start with an alphanumeric character
 /// - End with an alphanumeric character
 ///
 /// This customizer is intended to be used with the
@@ -57,7 +57,7 @@ import java.util.stream.Collectors;
 /// @see SchemaCustomizer.Customizer
 @NullMarked
 public class KubernetesNameCustomizer implements SchemaCustomizer.Customizer {
-    static final String KUBERNETES_NAME_PATTERN = "^[a-z]([a-z0-9\\-]{0,61}[a-z0-9])?$";
+    static final String KUBERNETES_NAME_PATTERN = "^[a-z0-9]([a-z0-9\\-]{0,61}[a-z0-9])?$";
 
     @Override
     public JSONSchemaProps apply(

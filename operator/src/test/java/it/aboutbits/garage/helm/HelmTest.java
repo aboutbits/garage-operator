@@ -319,7 +319,7 @@ class HelmTest {
                     .extracting(Volume::getName)
                     .containsExactly("db-credentials", "aws-secrets");
 
-            // A Secrets Store CSI volume is the case that `adminSecretFileRef` was added for.
+            // A Secrets Store CSI volume is a typical extra volume.
             assertThat(podSpec.getVolumes())
                     .filteredOn(volume -> "aws-secrets".equals(volume.getName()))
                     .singleElement()
