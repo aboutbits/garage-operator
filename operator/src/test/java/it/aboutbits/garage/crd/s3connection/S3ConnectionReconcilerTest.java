@@ -8,7 +8,6 @@ import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.CRPhase;
 import it.aboutbits.garage.core.adminapi.GarageAdminApi;
 import it.aboutbits.garage.core.adminapi.GarageAdminClientFactory;
-import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import lombok.RequiredArgsConstructor;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jspecify.annotations.NullMarked;
@@ -27,6 +26,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.concurrent.TimeUnit;
 
+import static it.aboutbits.garage._support.testdata.base.TestUtil.AWAIT_SECONDS;
+import static it.aboutbits.garage._support.testdata.base.TestUtil.awaitPhase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.awaitility.Awaitility.await;
@@ -41,8 +42,6 @@ import static org.awaitility.Awaitility.await;
 @RequiredArgsConstructor
 @NullMarked
 class S3ConnectionReconcilerTest {
-    private static final long AWAIT_SECONDS = 60;
-
     private final KubernetesClient kubernetesClient;
 
     private final Given given;
@@ -85,49 +84,13 @@ class S3ConnectionReconcilerTest {
         TestUtil.resetEnvironment(kubernetesClient);
     }
 
-    private S3Connection awaitPhase(
-            S3Connection s3Connection,
-            CRPhase expectedPhase
-    ) {
-        //noinspection ConstantConditions
-        return kubernetesClient.resources(S3Connection.class)
-                .inNamespace(s3Connection.getMetadata().getNamespace())
-                .withName(s3Connection.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == expectedPhase,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    /// Make sure the cluster has a layout, so that it can actually serve requests.
-    private void givenAppliedLayout() {
-        var garageCluster = given.one()
-                .garageCluster()
-                .returnFirst();
-
-        //noinspection ConstantConditions
-        kubernetesClient.resources(GarageCluster.class)
-                .inNamespace(garageCluster.getMetadata().getNamespace())
-                .withName(garageCluster.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == CRPhase.READY,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
     @Nested
     class Probe {
         @Test
         @DisplayName("A connection to a serving cluster should become ready")
         void servingCluster_becomesReady() {
             // given
-            givenAppliedLayout();
+            given.appliedLayout();
 
             // when
             var s3Connection = given.one()
@@ -135,7 +98,7 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(s3Connection, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Garage cluster");
         }
@@ -144,7 +107,7 @@ class S3ConnectionReconcilerTest {
         @DisplayName("An admin token that ends with a newline should be accepted")
         void tokenWithTrailingNewline_becomesReady() {
             // given
-            givenAppliedLayout();
+            given.appliedLayout();
 
             // As written by `echo "$TOKEN" > token.txt` and `kubectl create secret generic --from-file`.
             var adminSecretRef = given.one()
@@ -159,7 +122,7 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // then
-            awaitPhase(s3Connection, CRPhase.READY);
+            awaitPhase(kubernetesClient, s3Connection, CRPhase.READY);
         }
     }
 
@@ -181,7 +144,7 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(s3Connection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage())
                     .startsWith("The Garage Admin API request failed [status=403, code=")
@@ -205,7 +168,7 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(s3Connection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Secret reference not found");
         }
@@ -221,7 +184,7 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(s3Connection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).isNotBlank();
         }

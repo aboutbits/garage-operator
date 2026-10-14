@@ -7,7 +7,6 @@ import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.SecretKeyRef;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import it.aboutbits.garage.crd.s3connection.S3ConnectionSpec;
-import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -26,9 +25,6 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
 
     private @Nullable String withNamespace;
 
-    @Setter(AccessLevel.NONE)
-    private boolean withoutNamespace = false;
-
     private @Nullable String withName;
 
     private @Nullable String withAdminEndpoint;
@@ -45,11 +41,6 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
         this.given = given;
         this.kubernetesClient = kubernetesClient;
         this.garageConnectionDetails = garageConnectionDetails;
-    }
-
-    public S3ConnectionCreate withoutNamespace() {
-        this.withoutNamespace = true;
-        return this;
     }
 
     @Override
@@ -88,11 +79,7 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
                 );
     }
 
-    private @Nullable String getNamespace() {
-        if (withoutNamespace) {
-            return null;
-        }
-
+    private String getNamespace() {
         if (withNamespace != null) {
             return withNamespace;
         }

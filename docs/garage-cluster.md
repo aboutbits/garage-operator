@@ -89,9 +89,10 @@ The token needs access to these Admin API endpoints: `GetClusterStatus`, `GetClu
 
 `PENDING` is the normal state right after a `helm install`, while Garage is still starting and reports no nodes or a disconnected node; it is retried every 15 seconds.
 
-`ERROR` has two causes:
+`ERROR` has three causes:
 
 - The Secret, the token or the endpoint is wrong, or Garage cannot be reached. The operator tries again every 60 seconds.
+- Another `GarageCluster` already manages the node. The operator tries again every 60 seconds, so this one takes over when the other one is deleted.
 - Garage reports more than one node. The operator does not try again before the next resync after 10 minutes, or a change of the spec.
 
 `health`, `storageNodes` and `storageNodesUp` are only set while the phase is `READY`, so another phase does not show an old value.

@@ -112,7 +112,7 @@ public class GarageClusterService {
             var other = managedElsewhere.get();
 
             throw new IllegalStateException(
-                    "The Garage node is already managed by GarageCluster %s/%s [nodeId=%s]".formatted(
+                    "The Garage node is already managed by GarageCluster %s/%s. Delete one of the two GarageClusters [nodeId=%s]".formatted(
                             other.getMetadata().getNamespace(),
                             other.getMetadata().getName(),
                             nodeId

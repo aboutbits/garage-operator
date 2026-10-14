@@ -181,7 +181,7 @@ class GarageClusterServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("already managed by GarageCluster acme/other [nodeId=node-1]");
+                    .hasMessageContaining("already managed by GarageCluster acme/other. Delete one of the two GarageClusters [nodeId=node-1]");
 
             thenNoLayoutIsWritten();
         }

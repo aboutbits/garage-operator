@@ -24,9 +24,6 @@ public class SecretKeyRefCreate extends TestDataCreator<SecretKeyRef> {
 
     private @Nullable String withNamespace;
 
-    @Setter(AccessLevel.NONE)
-    private boolean withoutNamespace = false;
-
     private @Nullable String withName;
 
     private @Nullable String withKey;
@@ -45,11 +42,6 @@ public class SecretKeyRefCreate extends TestDataCreator<SecretKeyRef> {
     ) {
         super(numberOfItems);
         this.kubernetesClient = kubernetesClient;
-    }
-
-    public SecretKeyRefCreate withoutNamespace() {
-        this.withoutNamespace = true;
-        return this;
     }
 
     public SecretKeyRefCreate withoutToken() {
@@ -99,11 +91,7 @@ public class SecretKeyRefCreate extends TestDataCreator<SecretKeyRef> {
         return secretKeyRef;
     }
 
-    private @Nullable String getNamespace() {
-        if (withoutNamespace) {
-            return null;
-        }
-
+    private String getNamespace() {
         if (withNamespace != null) {
             return withNamespace;
         }

@@ -32,6 +32,8 @@ import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import static it.aboutbits.garage._support.testdata.base.TestUtil.AWAIT_SECONDS;
+import static it.aboutbits.garage._support.testdata.base.TestUtil.awaitPhase;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.awaitility.Awaitility.await;
@@ -48,8 +50,6 @@ import static org.awaitility.Awaitility.await;
 @RequiredArgsConstructor
 @NullMarked
 class GarageClusterReconcilerTest {
-    private static final long AWAIT_SECONDS = 60;
-
     private final KubernetesClient kubernetesClient;
 
     private final Given given;
@@ -94,25 +94,6 @@ class GarageClusterReconcilerTest {
         TestUtil.resetEnvironment(kubernetesClient);
     }
 
-    /// Waits for the phase at the current generation, so that a phase from before an edit does not count.
-    private GarageCluster awaitPhase(
-            GarageCluster garageCluster,
-            CRPhase expectedPhase
-    ) {
-        //noinspection ConstantConditions
-        return kubernetesClient.resources(GarageCluster.class)
-                .inNamespace(garageCluster.getMetadata().getNamespace())
-                .withName(garageCluster.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getObservedGeneration() == item.getMetadata().getGeneration()
-                                && item.getStatus().getPhase() == expectedPhase,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
     private GarageCluster editLayout(
             GarageCluster garageCluster,
             Consumer<GarageClusterLayoutSpec> edit
@@ -139,7 +120,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // when
-            var reconciled = awaitPhase(garageCluster, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, garageCluster, CRPhase.READY);
 
             // then
             var status = reconciled.getStatus();
@@ -170,7 +151,7 @@ class GarageClusterReconcilerTest {
                     .withTags(List.of("ssd", "fast"))
                     .returnFirst();
 
-            awaitPhase(garageCluster, CRPhase.READY);
+            awaitPhase(kubernetesClient, garageCluster, CRPhase.READY);
 
             var layoutVersion = garageAdminApi().getClusterLayout().version();
 
@@ -178,7 +159,7 @@ class GarageClusterReconcilerTest {
             var edited = editLayout(garageCluster, layout -> layout.setTags(List.of("fast", "ssd")));
 
             // then
-            var reconciled = awaitPhase(edited, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, edited, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getLayoutVersion()).isEqualTo(layoutVersion);
             assertThat(garageAdminApi().getClusterLayout().version()).isEqualTo(layoutVersion);
@@ -193,7 +174,7 @@ class GarageClusterReconcilerTest {
                     .withCapacity("20Gi")
                     .returnFirst();
 
-            awaitPhase(garageCluster, CRPhase.READY);
+            awaitPhase(kubernetesClient, garageCluster, CRPhase.READY);
 
             var layoutVersion = garageAdminApi().getClusterLayout().version();
 
@@ -201,7 +182,7 @@ class GarageClusterReconcilerTest {
             var edited = editLayout(garageCluster, layout -> layout.setCapacity("30Gi"));
 
             // then
-            var reconciled = awaitPhase(edited, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, edited, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getLayoutVersion()).isGreaterThan(layoutVersion);
 
@@ -226,7 +207,7 @@ class GarageClusterReconcilerTest {
                     .withCapacity("20Gi")
                     .returnFirst();
 
-            awaitPhase(first, CRPhase.READY);
+            awaitPhase(kubernetesClient, first, CRPhase.READY);
 
             var layoutVersion = garageAdminApi().getClusterLayout().version();
 
@@ -237,7 +218,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(second, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, second, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains(
                     "already managed by GarageCluster %s/%s".formatted(
@@ -248,7 +229,7 @@ class GarageClusterReconcilerTest {
             assertThat(reconciled.getStatus().getNodeId()).isNull();
             assertThat(garageAdminApi().getClusterLayout().version()).isEqualTo(layoutVersion);
 
-            assertThat(awaitPhase(first, CRPhase.READY).getStatus().getNodeId()).isNotBlank();
+            assertThat(awaitPhase(kubernetesClient, first, CRPhase.READY).getStatus().getNodeId()).isNotBlank();
         }
 
         @Test
@@ -266,7 +247,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // precondition: the health is set while READY
-            assertThat(awaitPhase(garageCluster, CRPhase.READY).getStatus().getHealth()).isNotNull();
+            assertThat(awaitPhase(kubernetesClient, garageCluster, CRPhase.READY).getStatus().getHealth()).isNotNull();
 
             kubernetesClient.secrets()
                     .inNamespace(adminSecretRef.getNamespace())
@@ -284,7 +265,7 @@ class GarageClusterReconcilerTest {
             var edited = editLayout(garageCluster, layout -> layout.setTags(List.of("edited")));
 
             // then
-            var status = awaitPhase(edited, CRPhase.ERROR).getStatus();
+            var status = awaitPhase(kubernetesClient, edited, CRPhase.ERROR).getStatus();
 
             assertThat(status.getHealth()).isNull();
             assertThat(status.getStorageNodes()).isZero();
@@ -307,7 +288,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(garageCluster, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageCluster, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage())
                     .startsWith("The Garage Admin API request failed [status=403, code=")
@@ -331,7 +312,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(garageCluster, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageCluster, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Secret reference not found");
         }
@@ -352,7 +333,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(garageCluster, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageCluster, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains("missing the referenced key");
         }
@@ -368,7 +349,7 @@ class GarageClusterReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(garageCluster, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageCluster, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).isNotBlank();
         }
@@ -410,6 +391,24 @@ class GarageClusterReconcilerTest {
             // then
             assertThat(thrown.getCode()).isEqualTo(422);
             assertThat(thrown.getMessage()).contains("The capacity must be a Kubernetes quantity of whole bytes");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", " "})
+        @DisplayName("A blank zone should be rejected")
+        void blankZone_isRejected(String zone) {
+            // when
+            var thrown = catchThrowableOfType(
+                    KubernetesClientException.class,
+                    () -> given.one()
+                            .garageCluster()
+                            .withZone(zone)
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown.getCode()).isEqualTo(422);
+            assertThat(thrown.getMessage()).contains("The zone must not be empty.");
         }
     }
 }

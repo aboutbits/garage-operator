@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S extends CRStatus> {
     /// Bounds how long backend drift, which Kubernetes sees no events for, goes unnoticed.
     public static final long RESYNC_INTERVAL_MINUTES = 10;
+    public static final long RETRY_SECONDS = 60;
 
     protected abstract S newStatus();
 
@@ -66,7 +67,7 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         //noinspection ConstantConditions
         if (s3Connection == null) {
             log.error(
-                    "The specified S3Connection does not exist [resource={}/{}]",
+                    "The specified S3Connection does not exist [spec.connectionRef={}/{}]",
                     connectionNamespace,
                     connectionName
             );
@@ -80,7 +81,7 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         //noinspection ConstantConditions
         if (status == null) {
             log.warn(
-                    "The specified S3Connection has not been probed yet [resource={}/{}]",
+                    "The specified S3Connection has not been probed yet [spec.connectionRef={}/{}]",
                     connectionNamespace,
                     connectionName
             );
@@ -93,7 +94,7 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
 
         if (!Objects.equals(currentPhase, expectedPhase)) {
             log.warn(
-                    "The specified S3Connection is not ready yet [resource={}/{}, status.phase={}]",
+                    "The specified S3Connection is not ready yet [spec.connectionRef={}/{}, status.phase={}]",
                     connectionNamespace,
                     connectionName,
                     currentPhase
@@ -105,7 +106,7 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         // READY of an older generation says nothing about the current spec.
         if (status.getObservedGeneration() != s3Connection.getMetadata().getGeneration()) {
             log.warn(
-                    "The specified S3Connection changed and has not been probed again yet [resource={}/{}, status.observedGeneration={}, metadata.generation={}]",
+                    "The specified S3Connection changed and has not been probed again yet [spec.connectionRef={}/{}, status.observedGeneration={}, metadata.generation={}]",
                     connectionNamespace,
                     connectionName,
                     status.getObservedGeneration(),
@@ -134,6 +135,6 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
                 .setMessage(exception.getMessage());
 
         return UpdateControl.patchStatus(resource)
-                .rescheduleAfter(60, TimeUnit.SECONDS);
+                .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
     }
 }

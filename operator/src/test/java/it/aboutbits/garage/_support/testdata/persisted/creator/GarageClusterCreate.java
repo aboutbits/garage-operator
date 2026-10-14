@@ -8,7 +8,6 @@ import it.aboutbits.garage.core.SecretKeyRef;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.garagecluster.GarageClusterLayoutSpec;
 import it.aboutbits.garage.crd.garagecluster.GarageClusterSpec;
-import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -27,9 +26,6 @@ public class GarageClusterCreate extends TestDataCreator<GarageCluster> {
     private final Given.GarageConnectionDetails garageConnectionDetails;
 
     private @Nullable String withNamespace;
-
-    @Setter(AccessLevel.NONE)
-    private boolean withoutNamespace = false;
 
     private @Nullable String withName;
 
@@ -53,11 +49,6 @@ public class GarageClusterCreate extends TestDataCreator<GarageCluster> {
         this.given = given;
         this.kubernetesClient = kubernetesClient;
         this.garageConnectionDetails = garageConnectionDetails;
-    }
-
-    public GarageClusterCreate withoutNamespace() {
-        this.withoutNamespace = true;
-        return this;
     }
 
     @Override
@@ -103,11 +94,7 @@ public class GarageClusterCreate extends TestDataCreator<GarageCluster> {
                 );
     }
 
-    private @Nullable String getNamespace() {
-        if (withoutNamespace) {
-            return null;
-        }
-
+    private String getNamespace() {
         if (withNamespace != null) {
             return withNamespace;
         }
