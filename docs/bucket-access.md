@@ -46,6 +46,10 @@ instead.
 
 What a reference resolves to can still change: a `Bucket` or `AccessKey` deleted and recreated under the same name may stand for a different bucket or key on the backend. The grant follows it — the previous grant, as recorded in the status, is revoked first, then the new one is made.
 
+Only one `BucketAccess` grants an `AccessKey` permissions on a given bucket. A second one for the same bucket and key, in any namespace, reports `ERROR` and changes nothing: two complete lists would overwrite each other at every reconcile. Deleting the refused one leaves the other one's grant alone.
+
+The admin token of the `S3Connection` needs access to the Admin API endpoints `ListBuckets`, `GetBucketInfo`, `AllowBucketKey` and `DenyBucketKey`, see [`S3Connection`](s3-connection.md#spec).
+
 ### Permissions
 
 | Permission | Allows                                                                                                                      |
@@ -69,11 +73,13 @@ The list is the **complete desired state**. Removing `write` from the list revok
 The backend identifiers are recorded so the grant can still be revoked after the `Bucket` or
 `AccessKey` resource is gone — they are routinely deleted first.
 
+`ERROR` means that the last reconciliation failed, and `message` has the reason: for example the backend cannot be reached, another `BucketAccess` already grants the same pair, or the `Bucket` and the `AccessKey` live on different `S3Connection`s. The operator tries again every 60 seconds. For different `S3Connection`s, it tries again only when the `Bucket` or the `AccessKey` changes, or at the resync after 10 minutes.
+
 ## Dependencies
 
 A `BucketAccess` stays `PENDING` until its `Bucket`, its `AccessKey` and their `S3Connection` are all `READY`. It does not poll for that: the operator watches `Bucket` and `AccessKey` resources and reconciles a waiting grant **as soon as** the one it waits on changes. A 60 second retry remains as a safety net only.
 
-The `Bucket` and the `AccessKey` must live on the **same `S3Connection`**. A grant between a bucket on one backend and a key on another is meaningless, so it is reported as `ERROR` rather than retried; changing either resource triggers a new attempt.
+The `Bucket` and the `AccessKey` must live on the **same `S3Connection`**. A grant between a bucket on one backend and a key on another is meaningless, so it is reported as `ERROR` rather than retried; changing either resource triggers a new attempt. A grant made earlier, before one of the two was recreated on another `S3Connection`, is revoked first, so the key does not keep access to the old bucket.
 
 References are resolved relative to the resource that holds them: a `Bucket`'s `connectionRef`
 without a namespace means the `Bucket`'s namespace, not the grant's.

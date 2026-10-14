@@ -1,7 +1,9 @@
 package it.aboutbits.garage.crd.bucketaccess;
 
+import io.fabric8.kubernetes.api.model.NamespaceBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.junit.QuarkusTest;
+import it.aboutbits.garage._support.testdata.base.TestDataCreator;
 import it.aboutbits.garage._support.testdata.base.TestUtil;
 import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.CRPhase;
@@ -13,6 +15,7 @@ import it.aboutbits.garage.core.adminapi.dto.ApiBucketKeyPerm;
 import it.aboutbits.garage.core.adminapi.dto.GetBucketInfoKey;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.bucket.Bucket;
+import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -155,10 +158,30 @@ class BucketAccessReconcilerTest {
         return ref(accessKey.getMetadata().getName());
     }
 
+    /// A second connection to the same Garage, without a second GarageCluster, which the operator refuses.
+    private ResourceRef givenSecondConnection() {
+        var s3Connection = awaitPhase(
+                kubernetesClient,
+                given.one()
+                        .s3Connection()
+                        .returnFirst(),
+                CRPhase.READY
+        );
+
+        return ref(s3Connection.getMetadata().getNamespace(), s3Connection.getMetadata().getName());
+    }
+
     private ResourceRef ref(String name) {
+        return ref(kubernetesClient.getNamespace(), name);
+    }
+
+    private ResourceRef ref(
+            String namespace,
+            String name
+    ) {
         var ref = new ResourceRef();
 
-        ref.setNamespace(kubernetesClient.getNamespace());
+        ref.setNamespace(namespace);
         ref.setName(name);
 
         return ref;
@@ -199,11 +222,10 @@ class BucketAccessReconcilerTest {
                 .region(GARAGE_REGION)
                 // Garage addresses buckets by path; virtual-host style needs DNS set up for it.
                 .forcePathStyle(true)
-                // Since 2.30 the SDK sends a CRC32 checksum trailer with every upload by default.
-                // Over plain HTTP the chunks are also signed, and Garage rejects that combination
-                // as an invalid payload signature (seen on v2.3.0 and v2.4.1). Only checksumming
-                // when an operation requires it avoids the trailer — the same setting
-                // applications need against Garage.
+                // TODO: Remove these two lines once https://git.deuxfleurs.fr/Deuxfleurs/garage/issues/1549
+                //  is fixed. Garage rejects the signed checksum trailer that the AWS SDK sends over
+                //  plain HTTP by default (SDK 2.30 and later, seen on Garage v2.3.0 and v2.4.1).
+                //  Applications need the same setting against Garage.
                 .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
                 .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
                 .httpClient(UrlConnectionHttpClient.create())
@@ -284,6 +306,97 @@ class BucketAccessReconcilerTest {
             assertThat(permissions.read()).isTrue();
             assertThat(permissions.write()).isFalse();
             assertThat(permissions.owner()).isFalse();
+        }
+
+        @Test
+        @DisplayName("A second BucketAccess for the same bucket and key should be refused")
+        void secondGrantOnSamePair_isRefused() {
+            // given
+            var connectionRef = given.readyConnection();
+            var bucketRef = givenReadyBucket(connectionRef, "test-shared-bucket");
+            var accessKeyRef = givenReadyAccessKey(connectionRef, "test-shared-key");
+
+            var first = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ, BucketPermission.WRITE)
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, first, CRPhase.READY);
+
+            // when
+            var second = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            // then
+            var refused = awaitPhase(kubernetesClient, second, CRPhase.ERROR);
+
+            assertThat(refused.getStatus().getMessage()).contains(
+                    "already has a grant on this bucket from BucketAccess %s/%s".formatted(
+                            first.getMetadata().getNamespace(),
+                            first.getMetadata().getName()
+                    )
+            );
+
+            // Nothing recorded, so deleting the refused one cannot revoke the first one's grant.
+            assertThat(refused.getStatus().getBucketId()).isNull();
+            assertThat(refused.getStatus().getAccessKeyId()).isNull();
+        }
+
+        @Test
+        @DisplayName("Deleting a refused second BucketAccess should leave the first one's grant intact")
+        void refusedGrantDeletion_keepsFirstGrant() {
+            // given
+            var connectionRef = given.readyConnection();
+            var bucketRef = givenReadyBucket(connectionRef, "test-contested-bucket");
+            var accessKeyRef = givenReadyAccessKey(connectionRef, "test-contested-key");
+
+            var first = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ, BucketPermission.WRITE)
+                    .returnFirst();
+
+            var granted = awaitPhase(kubernetesClient, first, CRPhase.READY);
+
+            var second = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, second, CRPhase.ERROR);
+
+            var resource = kubernetesClient.resources(BucketAccess.class)
+                    .inNamespace(second.getMetadata().getNamespace())
+                    .withName(second.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+
+            // then
+            var permissions = backendPermissions(granted);
+
+            assertThat(permissions.read()).isTrue();
+            assertThat(permissions.write()).isTrue();
+
+            var remaining = kubernetesClient.resources(BucketAccess.class)
+                    .inNamespace(first.getMetadata().getNamespace())
+                    .withName(first.getMetadata().getName())
+                    .get();
+
+            assertThat(remaining.getStatus().getPhase()).isEqualTo(CRPhase.READY);
         }
     }
 
@@ -442,20 +555,7 @@ class BucketAccessReconcilerTest {
         void differentConnections_areRefused() {
             // given
             var bucketConnectionRef = given.readyConnection();
-
-            // A second connection to the same Garage, without a second GarageCluster, which the operator refuses.
-            var accessKeyConnection = awaitPhase(
-                    kubernetesClient,
-                    given.one()
-                            .s3Connection()
-                            .returnFirst(),
-                    CRPhase.READY
-            );
-
-            var accessKeyConnectionRef = new ResourceRef();
-
-            accessKeyConnectionRef.setNamespace(accessKeyConnection.getMetadata().getNamespace());
-            accessKeyConnectionRef.setName(accessKeyConnection.getMetadata().getName());
+            var accessKeyConnectionRef = givenSecondConnection();
 
             var bucketRef = givenReadyBucket(bucketConnectionRef, "test-split-bucket");
             var accessKeyRef = givenReadyAccessKey(accessKeyConnectionRef, "test-split-key");
@@ -471,7 +571,7 @@ class BucketAccessReconcilerTest {
             // then
             var reconciled = awaitPhase(kubernetesClient, bucketAccess, CRPhase.ERROR);
 
-            assertThat(reconciled.getStatus().getMessage()).contains("different S3Connections");
+            assertThat(reconciled.getStatus().getMessage()).contains("live on different S3Connections");
         }
 
         @Test
@@ -500,6 +600,210 @@ class BucketAccessReconcilerTest {
 
             // then
             assertThat(kubernetesClient.resources(BucketAccess.class).list().getItems()).isEmpty();
+        }
+    }
+
+    @Nested
+    class Cleanup {
+        @Test
+        @DisplayName("A BucketAccess that never granted anything should be released at once")
+        void neverGranted_isReleasedAtOnce() {
+            // given
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withBucketRef(ref("does-not-exist"))
+                    .withAccessKeyRef(ref("does-not-exist-either"))
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            var pending = awaitPhase(kubernetesClient, bucketAccess, CRPhase.PENDING);
+
+            // precondition: with a recorded grant, the cleanup would need its connection instead
+            assertThat(pending.getStatus().getBucketId()).isNull();
+
+            var resource = kubernetesClient.resources(BucketAccess.class)
+                    .inNamespace(bucketAccess.getMetadata().getNamespace())
+                    .withName(bucketAccess.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+        }
+
+        @Test
+        @DisplayName("A BucketAccess whose S3Connection is gone should wait for it, and revoke the grant once it is back")
+        void lostConnection_blocksDeletionUntilBack() {
+            // given
+            var connectionRef = given.readyConnection();
+            var bucketRef = givenReadyBucket(connectionRef, "test-orphaned-bucket");
+            var accessKeyRef = givenReadyAccessKey(connectionRef, "test-orphaned-key");
+
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            var granted = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
+
+            var s3Connection = kubernetesClient.resources(S3Connection.class)
+                    .inNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName());
+
+            s3Connection.delete();
+
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> s3Connection.get() == null);
+
+            var resource = kubernetesClient.resources(BucketAccess.class)
+                    .inNamespace(bucketAccess.getMetadata().getNamespace())
+                    .withName(bucketAccess.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            //noinspection ConstantConditions
+            var blocked = resource.waitUntilCondition(
+                    item -> item != null
+                            && item.getStatus() != null
+                            && item.getStatus().getMessage() != null
+                            && item.getStatus().getMessage().contains("no longer exists or is not ready yet"),
+                    AWAIT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+
+            assertThat(blocked.getStatus().getPhase()).isEqualTo(CRPhase.DELETING);
+            assertThat(backendPermissions(granted).read()).isTrue();
+
+            // when
+            given.one()
+                    .s3Connection()
+                    .withNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName())
+                    .returnFirst();
+
+            // then
+            // The BucketAccess does not watch its S3Connection, so only the retry of the cleanup notices it.
+            await().atMost(RETRY_SECONDS + AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+
+            assertThat(backendPermissions(granted).read()).isFalse();
+        }
+
+        @Test
+        @DisplayName("A BucketAccess whose bucket is already gone from the backend should be released")
+        void deletedBucket_isReleased() {
+            // given
+            var connectionRef = given.readyConnection();
+            var bucketRef = givenReadyBucket(connectionRef, "test-vanished-bucket");
+            var accessKeyRef = givenReadyAccessKey(connectionRef, "test-vanished-key");
+
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            var granted = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
+
+            // Behind the operator's back, so the grant to revoke has nothing left to be revoked on.
+            garageAdminApi().deleteBucket(Objects.requireNonNull(granted.getStatus().getBucketId()));
+
+            var resource = kubernetesClient.resources(BucketAccess.class)
+                    .inNamespace(bucketAccess.getMetadata().getNamespace())
+                    .withName(bucketAccess.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+        }
+    }
+
+    @Nested
+    class Teardown {
+        @Test
+        @DisplayName("Deleting a namespace whose S3Connection is already gone should not be blocked by its BucketAccesses")
+        void namespaceDeletion_isNotBlocked() {
+            // given
+            var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
+
+            kubernetesClient.namespaces()
+                    .resource(new NamespaceBuilder()
+                            .withNewMetadata()
+                            .withName(namespace)
+                            .endMetadata()
+                            .build()
+                    )
+                    .create();
+
+            var connectionRef = given.readyConnection(namespace);
+
+            var bucket = given.one()
+                    .bucket()
+                    .withNamespace(namespace)
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-teardown-bucket")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withNamespace(namespace)
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-teardown-key")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withNamespace(namespace)
+                    .withBucketRef(ref(namespace, bucket.getMetadata().getName()))
+                    .withAccessKeyRef(ref(namespace, accessKey.getMetadata().getName()))
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            var granted = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
+
+            // when
+            // What namespace deletion does to a Garage installed in that namespace: the
+            // connection goes away, independently of anything that depends on it. Waiting for it
+            // keeps the AccessKey from deleting the key, and the grant with it, on the way out.
+            var s3Connection = kubernetesClient.resources(S3Connection.class)
+                    .inNamespace(namespace)
+                    .withName(connectionRef.getName());
+
+            s3Connection.delete();
+
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> s3Connection.get() == null);
+
+            kubernetesClient.namespaces()
+                    .withName(namespace)
+                    .delete();
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> kubernetesClient.namespaces().withName(namespace).get() == null);
+
+            // Released without the backend: nothing could revoke the grant without its connection.
+            assertThat(backendPermissions(granted).read()).isTrue();
         }
     }
 
@@ -576,6 +880,70 @@ class BucketAccessReconcilerTest {
             assertThat(garageAdminApi().getBucketInfo(originalBucketId).keys())
                     .noneSatisfy(key -> assertThat(key.accessKeyId()).isEqualTo(accessKeyId));
         }
+
+        @Test
+        @DisplayName("When the referenced Bucket is recreated on another S3Connection, the old grant should be revoked before the refusal")
+        void bucketRecreatedOnOtherConnection_revokesGrant() {
+            // given
+            var connectionRef = given.readyConnection();
+            var otherConnectionRef = givenSecondConnection();
+            var accessKeyRef = givenReadyAccessKey(connectionRef, "test-stranded-key");
+
+            var original = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-stranded-bucket")
+                    .withReclaimPolicy(ReclaimPolicy.RETAIN)
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, original, CRPhase.READY);
+
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withBucketRef(ref(original.getMetadata().getName()))
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ, BucketPermission.WRITE)
+                    .returnFirst();
+
+            var granted = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
+
+            var originalBucketId = Objects.requireNonNull(granted.getStatus().getBucketId());
+            var accessKeyId = Objects.requireNonNull(granted.getStatus().getAccessKeyId());
+
+            // precondition: the grant is on the backend, so its absence later is down to the revoke
+            assertThat(backendPermissions(granted).read()).isTrue();
+
+            // when
+            // Retained, and the key stays too, so only the revoke can take the grant off the original bucket.
+            var originalResource = kubernetesClient.resources(Bucket.class)
+                    .inNamespace(original.getMetadata().getNamespace())
+                    .withName(original.getMetadata().getName());
+
+            originalResource.delete();
+
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> originalResource.get() == null);
+
+            var replacement = given.one()
+                    .bucket()
+                    .withName(original.getMetadata().getName())
+                    .withConnectionRef(otherConnectionRef)
+                    .withBucketName("test-elsewhere-bucket")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, replacement, CRPhase.READY);
+
+            // then
+            var refused = awaitPhase(kubernetesClient, bucketAccess, CRPhase.ERROR);
+
+            assertThat(refused.getStatus().getMessage()).contains("live on different S3Connections");
+            assertThat(refused.getStatus().getBucketId()).isNull();
+            assertThat(refused.getStatus().getAccessKeyId()).isNull();
+
+            assertThat(garageAdminApi().getBucketInfo(originalBucketId).keys())
+                    .noneSatisfy(key -> assertThat(key.accessKeyId()).isEqualTo(accessKeyId));
+        }
     }
 
     @Nested
@@ -597,6 +965,66 @@ class BucketAccessReconcilerTest {
             assertThat(thrown)
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("At least one permission must be granted");
+        }
+
+        @Test
+        @DisplayName("Changing the bucketRef should be rejected by the API server")
+        void changedBucketRef_isRejected() {
+            // given
+            var accessKeyRef = ref("test-pinned-key");
+
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withBucketRef(ref("test-pinned-bucket"))
+                    .withAccessKeyRef(accessKeyRef)
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .bucketAccess()
+                            .withName(bucketAccess.getMetadata().getName())
+                            .withBucketRef(ref("test-other-bucket"))
+                            .withAccessKeyRef(accessKeyRef)
+                            .withPermissions(BucketPermission.READ)
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The bucketRef is immutable");
+        }
+
+        @Test
+        @DisplayName("Changing the accessKeyRef should be rejected by the API server")
+        void changedAccessKeyRef_isRejected() {
+            // given
+            var bucketRef = ref("test-pinned-bucket");
+
+            var bucketAccess = given.one()
+                    .bucketAccess()
+                    .withBucketRef(bucketRef)
+                    .withAccessKeyRef(ref("test-pinned-key"))
+                    .withPermissions(BucketPermission.READ)
+                    .returnFirst();
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .bucketAccess()
+                            .withName(bucketAccess.getMetadata().getName())
+                            .withBucketRef(bucketRef)
+                            .withAccessKeyRef(ref("test-other-key"))
+                            .withPermissions(BucketPermission.READ)
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The accessKeyRef is immutable");
         }
     }
 

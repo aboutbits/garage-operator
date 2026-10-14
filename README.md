@@ -46,11 +46,11 @@ The operator talks to Garage only through its [Admin API v2](https://garagehq.de
 
 The work is split with the Helm chart like this:
 
-| Concern                                                                        | Owner                                                         |
-|--------------------------------------------------------------------------------|---------------------------------------------------------------|
-| StatefulSet, volumes, `garage.toml`, the admin token, Services                 | [Garage Helm chart](https://github.com/aboutbits/helm-garage) |
-| Cluster layout — a fresh Garage node serves no S3 traffic until one is applied | Operator, through `GarageCluster`                             |
-| Buckets, access keys, permissions                                              | Operator, through `Bucket`, `AccessKey` and `BucketAccess`    |
+| Concern                                                                                            | Owner                                                         |
+|----------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
+| StatefulSet, volumes, `garage.toml`, the admin token, Services                                     | [Garage Helm chart](https://github.com/aboutbits/helm-garage) |
+| Cluster layout — with `garage.singleNode: false`, Garage serves no S3 traffic until one is applied | Operator, through `GarageCluster`                             |
+| Buckets, access keys, permissions                                                                  | Operator, through `Bucket`, `AccessKey` and `BucketAccess`    |
 
 The chart's own `bootstrap` option (one bucket and one key on first boot) is a testing convenience. In production, leave it off and declare those as Custom Resources instead.
 
@@ -130,11 +130,11 @@ The reasons:
 
 What the operator itself is allowed to do:
 
-| Resource            | Verbs                                               | Why                                                                    |
-|---------------------|-----------------------------------------------------|------------------------------------------------------------------------|
+| Resource                | Verbs                                               | Why                                                                    |
+|-------------------------|-----------------------------------------------------|------------------------------------------------------------------------|
 | `garage.aboutbits.it/*` | all                                                 | Its own Custom Resources, their status and finalizers.                 |
-| `secrets`           | `get`, `list`, `watch`, `create`, `update`, `patch` | Reading admin tokens; writing the credentials Secrets of `AccessKey`s. |
-| `namespaces`        | `get`                                               | Recognizing a namespace that is being deleted.                         |
+| `secrets`               | `get`, `list`, `watch`, `create`, `update`, `patch` | Reading admin tokens; writing the credentials Secrets of `AccessKey`s. |
+| `namespaces`            | `get`                                               | Recognizing a namespace that is being deleted.                         |
 
 The secret half of an access key only ever ends up in the `AccessKey`'s own Secret, never in a status or a log line.
 
@@ -154,10 +154,10 @@ All resources live in the API group `garage.aboutbits.it`, version `v1`, and are
 
 ### Showcase
 
-The following example sets up a Garage installed with the AboutBits Helm chart as release `acme` in the namespace `acme`, and gives an application read and write access to one bucket. The chart names its Services and its admin Secret after the release, so the admin API is `acme-garage:3903`, S3 is `acme-garage:3900`, and the token is the `admin_token` key of the Secret `acme-garage`.
+The following example sets up a Garage installed with the AboutBits Helm chart and `garage.singleNode: false` as release `acme` in the namespace `acme`, and gives an application read and write access to one bucket. The chart names its Services and its admin Secret after the release, so the admin API is `acme-garage:3903`, S3 is `acme-garage:3900`, and the token is the `admin_token` key of the Secret `acme-garage`.
 
 ```yaml
-# Assign the cluster layout. A fresh Garage node serves no S3 traffic until this is done.
+# Assign the cluster layout. With `garage.singleNode: false`, Garage serves no S3 traffic until this is done.
 ---
 apiVersion: garage.aboutbits.it/v1
 kind: GarageCluster
@@ -291,7 +291,7 @@ A resource whose backend cleanup cannot proceed keeps its finalizer and says why
 
 The safest way to remove a customer is to delete their `Bucket`, `AccessKey` and `BucketAccess` resources first — `terraform destroy` does this in dependency order — and the namespace afterwards.
 
-Deleting the namespace right away works too. When Garage is installed in that namespace, Garage, its admin Secret and the `S3Connection` disappear at the same time as everything else, and waiting for them would keep the namespace in `Terminating` forever. So once a namespace is being deleted and its `S3Connection` is gone, the operator releases the remaining resources without cleaning up on the backend. If the backend lives in another namespace, the keys, buckets and grants of the deleted namespace then stay there and have to be removed in Garage by hand.
+Deleting the namespace right away works too. When Garage is installed in that namespace, Garage, its admin Secret and the `S3Connection` disappear at the same time as everything else, and waiting for them would keep the namespace in `Terminating` forever. So once a namespace is being deleted and its `S3Connection` is missing or not `READY`, the operator releases the remaining resources without cleaning up on the backend. If the backend lives in another namespace, the keys, buckets and grants of the deleted namespace then stay there and have to be removed in Garage by hand.
 
 ### Rotating credentials
 
@@ -311,7 +311,7 @@ The operator runs as a single replica without leader election. Two instances wou
 
 ## Limitations
 
-- `GarageCluster` assigns layouts for **single-node** clusters only, which is what the AboutBits Helm chart deploys. On a larger cluster it reports `ERROR` instead of guessing zones and capacities.
+- `GarageCluster` assigns layouts for clusters with **one node** only, which is what the AboutBits Helm chart deploys; that is unrelated to the chart's `--single-node` mode, which a `GarageCluster` requires to be off. On a larger cluster it reports `ERROR` instead of guessing zones and capacities.
 - No credential rotation trigger, no lifecycle rules and no website configuration yet.
 
 ## Contribute

@@ -27,8 +27,10 @@ import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -186,8 +188,21 @@ public class BucketAccessReconciler
         );
 
         if (!bucketAccessService.sameResource(bucketConnectionRef, accessKeyConnectionRef)) {
+            try {
+                // A grant recorded for an earlier resolution of the references stays behind untracked otherwise.
+                if (!revokeRecordedGrant(resource, status)) {
+                    return previousGrantNotRevocable(resource, status);
+                }
+            } catch (Exception e) {
+                return handleError(
+                        resource,
+                        status,
+                        e
+                );
+            }
+
             status.updatePhase(CRPhase.ERROR)
-                    .setMessage("The Bucket and the AccessKey live on different S3Connections [bucketConnectionRef=%s/%s, accessKeyConnectionRef=%s/%s]".formatted(
+                    .setMessage("The Bucket and the AccessKey live on different S3Connections. Recreate one of them on the same S3Connection [bucket.connectionRef=%s/%s, accessKey.connectionRef=%s/%s]".formatted(
                             bucketConnectionRef.getNamespace(),
                             bucketConnectionRef.getName(),
                             accessKeyConnectionRef.getNamespace(),
@@ -207,7 +222,7 @@ public class BucketAccessReconciler
             return pending(
                     resource,
                     status,
-                    "The specified S3Connection does not exist or is not ready yet [bucketConnectionRef=%s/%s]".formatted(
+                    "The specified S3Connection does not exist or is not ready yet [bucket.connectionRef=%s/%s]".formatted(
                             bucketConnectionRef.getNamespace(),
                             bucketConnectionRef.getName()
                     )
@@ -261,8 +276,8 @@ public class BucketAccessReconciler
 
         var connectionRef = new ResourceRef();
 
-        connectionRef.setName(connectionName);
         connectionRef.setNamespace(status.getConnectionNamespace());
+        connectionRef.setName(connectionName);
 
         var s3ConnectionOptional = getReferencedS3Connection(
                 kubernetesClient,
@@ -288,7 +303,7 @@ public class BucketAccessReconciler
                     resource,
                     status,
                     context,
-                    "The S3Connection the permissions were granted on no longer exists or is not ready yet [status.connectionNamespace=%s, status.connectionName=%s]".formatted(
+                    "The S3Connection the permissions were granted on no longer exists or is not ready yet [connection=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     )
@@ -330,17 +345,13 @@ public class BucketAccessReconciler
             String accessKeyId
     ) {
         try {
+            // Before anything is recorded: deleting a refused BucketAccess must not revoke the other one's grant.
+            requireNotGrantedElsewhere(resource, bucketId, accessKeyId);
+
             // A Bucket or AccessKey recreated under the same name resolves to a different backend
             // object; revoke the previous grant first, or it stays behind untracked.
             if (!revokePreviousGrant(resource, status, connectionRef, bucketId, accessKeyId)) {
-                return pending(
-                        resource,
-                        status,
-                        "The previous grant cannot be revoked yet, because its S3Connection does not exist or is not ready [status.connectionNamespace=%s, status.connectionName=%s]".formatted(
-                                status.getConnectionNamespace(),
-                                status.getConnectionName()
-                        )
-                );
+                return previousGrantNotRevocable(resource, status);
             }
 
             // Recorded before granting, so a half-done grant is still revoked on delete.
@@ -394,27 +405,35 @@ public class BucketAccessReconciler
             String bucketId,
             String accessKeyId
     ) {
-        var previousBucketId = status.getBucketId();
-        var previousAccessKeyId = status.getAccessKeyId();
-        var previousConnectionName = status.getConnectionName();
+        var previousConnectionRef = recordedConnectionRef(status);
 
-        if (previousBucketId == null || previousAccessKeyId == null || previousConnectionName == null) {
-            return true;
-        }
-
-        var previousConnectionRef = new ResourceRef();
-
-        previousConnectionRef.setName(previousConnectionName);
-        previousConnectionRef.setNamespace(status.getConnectionNamespace());
-
-        var unchanged = previousBucketId.equals(bucketId)
-                && previousAccessKeyId.equals(accessKeyId)
+        var unchanged = previousConnectionRef != null
+                && bucketId.equals(status.getBucketId())
+                && accessKeyId.equals(status.getAccessKeyId())
                 && bucketAccessService.sameResource(
                         bucketAccessService.qualify(previousConnectionRef, resource.getMetadata().getNamespace()),
                         connectionRef
                 );
 
         if (unchanged) {
+            return true;
+        }
+
+        return revokeRecordedGrant(resource, status);
+    }
+
+    /// Revokes the grant recorded in the status, if any, and forgets it.
+    ///
+    /// @return `false` if a grant is recorded but its connection is not usable yet
+    private boolean revokeRecordedGrant(
+            BucketAccess resource,
+            BucketAccessStatus status
+    ) {
+        var previousBucketId = status.getBucketId();
+        var previousAccessKeyId = status.getAccessKeyId();
+        var previousConnectionRef = recordedConnectionRef(status);
+
+        if (previousBucketId == null || previousAccessKeyId == null || previousConnectionRef == null) {
             return true;
         }
 
@@ -428,19 +447,82 @@ public class BucketAccessReconciler
             return false;
         }
 
-        var previousConnection = previousConnectionOptional.get();
-
         log.info(
-                "Revoking the previous grant, the references now resolve to different backend objects [resource={}/{}, previousBucketId={}, previousAccessKeyId={}]",
+                "Revoking the previous grant, the references now resolve to different backend objects [resource={}/{}, status.bucketId={}, status.accessKeyId={}]",
                 resource.getMetadata().getNamespace(),
                 resource.getMetadata().getName(),
                 previousBucketId,
                 previousAccessKeyId
         );
 
-        garageService.revokeBucketKey(previousConnection, previousBucketId, previousAccessKeyId);
+        garageService.revokeBucketKey(previousConnectionOptional.get(), previousBucketId, previousAccessKeyId);
+
+        status.setBucketId(null)
+                .setAccessKeyId(null)
+                .setConnectionNamespace(null)
+                .setConnectionName(null);
 
         return true;
+    }
+
+    private @Nullable ResourceRef recordedConnectionRef(BucketAccessStatus status) {
+        var connectionName = status.getConnectionName();
+
+        if (connectionName == null) {
+            return null;
+        }
+
+        var connectionRef = new ResourceRef();
+
+        connectionRef.setNamespace(status.getConnectionNamespace());
+        connectionRef.setName(connectionName);
+
+        return connectionRef;
+    }
+
+    /// Two grants on the same pair would overwrite each other's permissions at every reconcile.
+    private void requireNotGrantedElsewhere(
+            BucketAccess resource,
+            String bucketId,
+            String accessKeyId
+    ) {
+        var grantedElsewhere = kubernetesClient.resources(BucketAccess.class)
+                .inAnyNamespace()
+                .list()
+                .getItems()
+                .stream()
+                .filter(other -> !Objects.equals(other.getMetadata().getUid(), resource.getMetadata().getUid()))
+                .filter(other -> other.getStatus() != null
+                        && bucketId.equals(other.getStatus().getBucketId())
+                        && accessKeyId.equals(other.getStatus().getAccessKeyId()))
+                .findFirst();
+
+        if (grantedElsewhere.isPresent()) {
+            var other = grantedElsewhere.get();
+
+            throw new IllegalStateException(
+                    "The AccessKey already has a grant on this bucket from BucketAccess %s/%s. Delete one of the two BucketAccesses [bucketId=%s, accessKeyId=%s]".formatted(
+                            other.getMetadata().getNamespace(),
+                            other.getMetadata().getName(),
+                            bucketId,
+                            accessKeyId
+                    )
+            );
+        }
+    }
+
+    private UpdateControl<BucketAccess> previousGrantNotRevocable(
+            BucketAccess resource,
+            BucketAccessStatus status
+    ) {
+        return pending(
+                resource,
+                status,
+                "The previous grant cannot be revoked yet, because its S3Connection does not exist or is not ready [connection=%s/%s]".formatted(
+                        status.getConnectionNamespace(),
+                        status.getConnectionName()
+                )
+        );
     }
 
     private UpdateControl<BucketAccess> pending(

@@ -29,12 +29,12 @@ public class BucketAccessService {
     ) {
         var qualified = new ResourceRef();
 
-        qualified.setName(ref.getName());
         qualified.setNamespace(
                 ref.getNamespace() != null
                         ? ref.getNamespace()
                         : holderNamespace
         );
+        qualified.setName(ref.getName());
 
         return qualified;
     }

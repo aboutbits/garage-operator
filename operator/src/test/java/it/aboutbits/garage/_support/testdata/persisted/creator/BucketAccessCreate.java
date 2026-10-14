@@ -55,8 +55,8 @@ public class BucketAccessCreate extends TestDataCreator<BucketAccess> {
         var item = new BucketAccess();
 
         item.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
                 .withNamespace(namespace)
+                .withName(name)
                 .build()
         );
 
