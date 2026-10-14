@@ -24,8 +24,8 @@ Both resources reference the same admin endpoint and Secret. That duplication is
 apiVersion: garage.aboutbits.it/v1
 kind: S3Connection
 metadata:
-  name: acme
   namespace: acme
+  name: acme
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
@@ -35,12 +35,22 @@ spec:
 
 ## Spec
 
-| Field                      | Required | Description                                                                                               |
-|----------------------------|----------|-----------------------------------------------------------------------------------------------------------|
-| `adminEndpoint`            | yes      | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use.                 |
-| `adminSecretRef.name`      | yes      | Name of the Secret holding the admin credentials.                                                         |
-| `adminSecretRef.namespace` | no       | Defaults to the namespace of the `S3Connection`.                                                          |
-| `adminSecretRef.key`       | yes      | Key within the Secret. The AboutBits Garage chart uses `admin_token`.                                     |
+| Field            | Type                                           | Description                                                                               | Required | Mutable |
+|------------------|------------------------------------------------|-------------------------------------------------------------------------------------------|----------|---------|
+| `adminEndpoint`  | `string`                                       | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use. | Yes      | No      |
+| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the Secret holding the admin credentials.                                    | Yes      | Yes     |
+
+### SecretKeyRef (`adminSecretRef`)
+
+| Field       | Type     | Description                                                                          | Required |
+|-------------|----------|--------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `S3Connection`. | No       |
+| `name`      | `string` | Name of the Secret.                                                                  | Yes      |
+| `key`       | `string` | Key within the Secret. The AboutBits Garage chart uses `admin_token`.                | Yes      |
+
+`adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `S3Connection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token.
+
+The token needs access to the Admin API endpoint `GetClusterHealth`. The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 
 ## Status
 

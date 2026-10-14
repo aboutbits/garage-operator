@@ -2,7 +2,7 @@ services:
   garage:
     # Keep this in sync with the image the AboutBits Garage Helm chart deploys.
     # https://github.com/aboutbits/helm-garage
-    image: dxflrs/garage:v2.3.0
+    image: dxflrs/garage:v2.4.1
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
     tmpfs:

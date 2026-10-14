@@ -65,11 +65,15 @@ public class GarageClusterReconciler
 
             var result = garageClusterService.reconcileLayout(
                     garageAdminApi,
-                    resource.getSpec().getLayout()
+                    resource
             );
 
-            status.setNodeId(result.nodeId())
-                    .setLayoutVersion(result.layoutVersion());
+            // Keep the recorded node while Garage reports none, so that no second GarageCluster can claim it meanwhile.
+            if (result.nodeId() != null) {
+                status.setNodeId(result.nodeId());
+            }
+
+            status.setLayoutVersion(result.layoutVersion());
 
             return switch (result.outcome()) {
                 case NO_NODES, NODE_DOWN -> awaitingCluster(resource, status, result);

@@ -19,11 +19,11 @@ public record LayoutReconcileResult(
         APPLIED
     }
 
-    public static LayoutReconcileResult noNodes() {
+    public static LayoutReconcileResult noNodes(long layoutVersion) {
         return new LayoutReconcileResult(
                 Outcome.NO_NODES,
                 null,
-                0,
+                layoutVersion,
                 "The Garage cluster reports no nodes yet"
         );
     }
@@ -36,15 +36,18 @@ public record LayoutReconcileResult(
                 Outcome.NODE_DOWN,
                 nodeId,
                 layoutVersion,
-                "The Garage node is not connected [node.id=%s]".formatted(nodeId)
+                "The Garage node is not connected [nodeId=%s]".formatted(nodeId)
         );
     }
 
-    public static LayoutReconcileResult unsupportedTopology(int nodeCount) {
+    public static LayoutReconcileResult unsupportedTopology(
+            int nodeCount,
+            long layoutVersion
+    ) {
         return new LayoutReconcileResult(
                 Outcome.UNSUPPORTED_TOPOLOGY,
                 null,
-                0,
+                layoutVersion,
                 "The Garage cluster reports %d nodes, but this operator only assigns layout roles for single-node clusters. Assign the layout manually, or open an issue if multi-node support is needed.".formatted(
                         nodeCount
                 )

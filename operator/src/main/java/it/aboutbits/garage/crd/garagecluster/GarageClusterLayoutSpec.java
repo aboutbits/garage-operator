@@ -26,12 +26,8 @@ public class GarageClusterLayoutSpec {
     /// Should match the data volume size. Garage uses it as a weight, not as a limit.
     @Required
     @ValidationRule(
-            value = "self.trim().size() > 0",
-            message = "The capacity must not be empty."
-    )
-    @ValidationRule(
-            value = "self.matches('^[0-9]+(\\\\.[0-9]+)?(E|P|T|G|M|k|Ei|Pi|Ti|Gi|Mi|Ki)?$')",
-            message = "The capacity must be a Kubernetes quantity, for example '20Gi'."
+            value = "isQuantity(self) && quantity(self).isInteger() && quantity(self).isGreaterThan(quantity('0'))",
+            message = "The capacity must be a Kubernetes quantity of whole bytes, greater than zero, for example '20Gi'."
     )
     private String capacity = "";
 

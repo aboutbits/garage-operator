@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
-import static it.aboutbits.garage.core.KubernetesService.SECRET_DATA_ADMIN_TOKEN_KEY;
 import static it.aboutbits.garage.core.KubernetesService.SECRET_TYPE_OPAQUE;
 
 /// Creates an `Opaque` Secret holding a token, plus the [SecretKeyRef] pointing at it.
@@ -18,6 +17,9 @@ import static it.aboutbits.garage.core.KubernetesService.SECRET_TYPE_OPAQUE;
 @Accessors(fluent = true, chain = true)
 @NullMarked
 public class SecretKeyRefCreate extends TestDataCreator<SecretKeyRef> {
+    /// The key the AboutBits Garage Helm chart stores the Admin API token under (https://github.com/aboutbits/helm-garage).
+    private static final String SECRET_DATA_ADMIN_TOKEN_KEY = "admin_token";
+
     private final KubernetesClient kubernetesClient;
 
     private @Nullable String withNamespace;

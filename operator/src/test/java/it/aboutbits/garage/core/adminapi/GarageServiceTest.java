@@ -44,10 +44,13 @@ class GarageServiceTest {
         @ValueSource(strings = {"healthy", "degraded"})
         @DisplayName("A cluster that can serve requests should be available")
         void servingCluster_isAvailable(String status) {
+            // given
             givenClusterHealth(status);
 
+            // when
             var result = garageService.probe(new S3Connection());
 
+            // then
             assertThat(result.available()).isTrue();
             assertThat(result.detail()).contains(status);
         }
@@ -55,10 +58,13 @@ class GarageServiceTest {
         @Test
         @DisplayName("An unavailable cluster should not be available, and should point at the layout")
         void unavailableCluster_isNotAvailable() {
+            // given
             givenClusterHealth("unavailable");
 
+            // when
             var result = garageService.probe(new S3Connection());
 
+            // then
             assertThat(result.available()).isFalse();
             assertThat(result.detail()).contains("GarageCluster");
         }

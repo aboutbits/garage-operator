@@ -14,9 +14,6 @@ import java.util.Map;
 public final class KubernetesService {
     public static final String SECRET_TYPE_OPAQUE = "Opaque";
 
-    /// The key the AboutBits Garage Helm chart stores the Admin API token under (https://github.com/aboutbits/helm-garage).
-    public static final String SECRET_DATA_ADMIN_TOKEN_KEY = "admin_token";
-
     public String getSecretRefToken(
             KubernetesClient kubernetesClient,
             SecretKeyRef secretRef,
@@ -47,17 +44,20 @@ public final class KubernetesService {
 
         var tokenBase64 = data.get(secretKey);
         if (tokenBase64 == null) {
-            throw new IllegalStateException("The Secret reference is missing the referenced key [secret.namespace=%s, secret.name=%s, secret.data.key=%s, available.secret.data.keys=%s]".formatted(
+            var availableKeys = data.keySet();
+
+            throw new IllegalStateException("The Secret reference is missing the referenced key [secret=%s/%s, secret.key=%s, availableKeys=%s]".formatted(
                     secretNamespace,
                     secretName,
                     secretKey,
-                    data.keySet()
+                    availableKeys
             ));
         }
 
-        var token = decode(tokenBase64);
+        // A token written with `echo "$TOKEN" > file` ends with a newline, which is invalid in an HTTP header.
+        var token = decode(tokenBase64).strip();
         if (token.isBlank()) {
-            throw new IllegalStateException("The Secret reference has a blank token [secret.namespace=%s, secret.name=%s, secret.data.key=%s]".formatted(
+            throw new IllegalStateException("The Secret reference has a blank token [secret=%s/%s, secret.key=%s]".formatted(
                     secretNamespace,
                     secretName,
                     secretKey
@@ -87,7 +87,7 @@ public final class KubernetesService {
                 .get();
 
         if (secret == null) {
-            throw new IllegalStateException("Secret reference not found [secret.namespace=%s, secret.name=%s]".formatted(
+            throw new IllegalStateException("Secret reference not found [secret=%s/%s]".formatted(
                     secretNamespace,
                     secretName
             ));
@@ -102,12 +102,14 @@ public final class KubernetesService {
             String secretNamespace,
             String secretName
     ) {
-        if (!expectedType.equals(secret.getType())) {
-            throw new IllegalArgumentException("The Secret reference is of the wrong type [secret.namespace=%s, secret.name=%s, expected.secret.type=%s, actual.secret.type=%s]".formatted(
+        var actualType = secret.getType();
+
+        if (!expectedType.equals(actualType)) {
+            throw new IllegalArgumentException("The Secret reference is of the wrong type [secret=%s/%s, expectedType=%s, actualType=%s]".formatted(
                     secretNamespace,
                     secretName,
                     expectedType,
-                    secret.getType()
+                    actualType
             ));
         }
     }
@@ -120,7 +122,7 @@ public final class KubernetesService {
         var data = secret.getData();
 
         if (data == null || data.isEmpty()) {
-            throw new IllegalStateException("The Secret reference has no data set [secret.namespace=%s, secret.name=%s]".formatted(
+            throw new IllegalStateException("The Secret reference has no data set [secret=%s/%s]".formatted(
                     secretNamespace,
                     secretName
             ));

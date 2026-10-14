@@ -17,13 +17,11 @@ public class Given {
     private final KubernetesClient kubernetesClient;
 
     /// Host port the Compose Dev Service published the Garage Admin API on.
-    @SuppressWarnings("NullAway.Init")
     @ConfigProperty(name = "garage.admin.port")
-    Integer garageAdminPort;
+    private final int garageAdminPort;
 
-    @SuppressWarnings("NullAway.Init")
     @ConfigProperty(name = "garage.admin.token")
-    String garageAdminToken;
+    private final String garageAdminToken;
 
     public GarageConnectionDetails garageConnectionDetails() {
         return new GarageConnectionDetails(

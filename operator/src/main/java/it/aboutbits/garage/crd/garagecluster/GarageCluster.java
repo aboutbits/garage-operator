@@ -6,12 +6,13 @@ import io.fabric8.kubernetes.api.model.Namespaced;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.model.annotation.Group;
 import io.fabric8.kubernetes.model.annotation.Version;
+import it.aboutbits.garage.core.Constants;
 import it.aboutbits.garage.core.Named;
 import org.jspecify.annotations.NullMarked;
 
 /// A Garage cluster whose layout the operator manages; everything else is owned by the Helm chart.
-@Version("v1")
-@Group("garage.aboutbits.it")
+@Version(Constants.CRD_VERSION)
+@Group(Constants.CRD_GROUP)
 @AdditionalPrinterColumn(
         name = "Name",
         jsonPath = ".status.name",

@@ -91,6 +91,7 @@ public class GarageAdminClientFactory {
                 .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .register(new BearerTokenFilter(token))
+                .register(new GarageErrorMapper())
                 .build(GarageAdminApi.class);
     }
 

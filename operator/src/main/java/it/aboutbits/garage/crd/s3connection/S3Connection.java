@@ -7,12 +7,13 @@ import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.model.annotation.Group;
 import io.fabric8.kubernetes.model.annotation.Version;
 import it.aboutbits.garage.core.CRStatus;
+import it.aboutbits.garage.core.Constants;
 import it.aboutbits.garage.core.Named;
 import org.jspecify.annotations.NullMarked;
 
 /// The Garage Admin API that buckets, access keys and permissions are created through.
-@Version("v1")
-@Group("garage.aboutbits.it")
+@Version(Constants.CRD_VERSION)
+@Group(Constants.CRD_GROUP)
 @AdditionalPrinterColumn(
         name = "Name",
         jsonPath = ".status.name",

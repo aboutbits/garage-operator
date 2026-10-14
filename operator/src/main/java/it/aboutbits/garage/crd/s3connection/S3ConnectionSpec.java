@@ -14,8 +14,13 @@ public class S3ConnectionSpec {
     /// The Garage Admin API on port 3903, not the S3 endpoint, e.g. `http://acme-garage.acme.svc:3903`.
     @Required
     @ValidationRule(
-            value = "self.startsWith('http://') || self.startsWith('https://')",
-            message = "The admin endpoint must be an http:// or https:// URL."
+            value = "isURL(self) && url(self).getScheme() in ['http', 'https'] && url(self).getHostname() != ''",
+            message = "The admin endpoint must be an http:// or https:// URL with a host."
+    )
+    // Buckets and access keys record the ids this Garage gave them, so another Garage would get second ones.
+    @ValidationRule(
+            value = "self == oldSelf",
+            message = "The adminEndpoint is immutable. Delete and recreate the S3Connection to point it at a different Garage."
     )
     private String adminEndpoint = "";
 

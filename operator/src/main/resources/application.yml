@@ -34,6 +34,10 @@ quarkus:
     # Whether controllers should only process events if the associated resource generation
     # has increased since the last reconciliation, otherwise will process all events.
     generation-aware: true
+  rest-client:
+    # Names the operator in the logs of a proxy in front of Garage. Only the product and the version:
+    # `adminEndpoint` can point at any server, so no Pod, node or cluster details.
+    user-agent: garage-operator/${quarkus.application.version}
   test:
     hang-detection-timeout: PT1M
 

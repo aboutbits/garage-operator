@@ -11,6 +11,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.quarkus.test.junit.QuarkusTest;
 import io.smallrye.common.process.ProcessBuilder;
+import it.aboutbits.garage.core.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jspecify.annotations.NullMarked;
@@ -46,7 +47,6 @@ class HelmTest {
             "volumeMounts"
     );
 
-    private static final String CRD_GROUP = "garage.aboutbits.it";
     /// Singular name (used for the reconciler's role binding) to plural name (used for the CRD
     /// file). Spelled out rather than derived, because `bucketaccess` → `bucketaccesses` is not a
     /// plain `+ "s"`.
@@ -158,7 +158,7 @@ class HelmTest {
         for (var crdPlural : CRD_NAMES.values()) {
             assertThat(chartPath.resolve("crds/%s.%s-v1.yml".formatted(
                     crdPlural,
-                    CRD_GROUP
+                    Constants.CRD_GROUP
             ))).exists();
         }
 

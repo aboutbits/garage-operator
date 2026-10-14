@@ -14,8 +14,8 @@ public class GarageClusterSpec {
     /// The Garage Admin API (port 3903), not the S3 endpoint, e.g. `http://my-release-garage.storage.svc:3903`.
     @Required
     @ValidationRule(
-            value = "self.startsWith('http://') || self.startsWith('https://')",
-            message = "The admin endpoint must be an http:// or https:// URL."
+            value = "isURL(self) && url(self).getScheme() in ['http', 'https'] && url(self).getHostname() != ''",
+            message = "The admin endpoint must be an http:// or https:// URL with a host."
     )
     private String adminEndpoint = "";
 

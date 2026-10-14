@@ -9,7 +9,7 @@ import org.jspecify.annotations.NullMarked;
 /// Adds the `Authorization: Bearer <token>` header expected by the Garage Admin API.
 @RequiredArgsConstructor
 @NullMarked
-public class BearerTokenFilter implements ClientRequestFilter {
+class BearerTokenFilter implements ClientRequestFilter {
     private final String token;
 
     @Override
