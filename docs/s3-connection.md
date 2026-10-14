@@ -38,7 +38,7 @@ spec:
 | Field            | Type                                           | Description                                                                               | Required | Mutable |
 |------------------|------------------------------------------------|-------------------------------------------------------------------------------------------|----------|---------|
 | `adminEndpoint`  | `string`                                       | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use. | Yes      | No      |
-| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the Secret holding the admin credentials.                                    | Yes      | Yes     |
+| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the `Opaque` Secret holding the Admin API bearer token.                      | Yes      | Yes     |
 
 ### SecretKeyRef (`adminSecretRef`)
 

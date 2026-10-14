@@ -67,7 +67,7 @@ public class GarageAdminClientFactory {
                 defaultNamespace
         );
 
-        var endpoint = parseEndpoint(adminEndpoint, adminSecretRef);
+        var endpoint = parseEndpoint(adminEndpoint, adminSecretRef, defaultNamespace);
 
         return clients.computeIfAbsent(
                 new ClientKey(endpoint, token),
@@ -107,14 +107,18 @@ public class GarageAdminClientFactory {
 
     private URI parseEndpoint(
             String adminEndpoint,
-            SecretKeyRef adminSecretRef
+            SecretKeyRef adminSecretRef,
+            String defaultNamespace
     ) {
         try {
             return new URI(adminEndpoint);
         } catch (URISyntaxException e) {
             throw new IllegalArgumentException(
-                    "The admin endpoint is not a valid URI [adminEndpoint=%s, adminSecretRef.name=%s]".formatted(
+                    "The admin endpoint is not a valid URI [spec.adminEndpoint=%s, spec.adminSecretRef=%s/%s]".formatted(
                             adminEndpoint,
+                            adminSecretRef.getNamespace() != null
+                                    ? adminSecretRef.getNamespace()
+                                    : defaultNamespace,
                             adminSecretRef.getName()
                     ),
                     e
