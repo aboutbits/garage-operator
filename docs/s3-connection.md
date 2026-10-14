@@ -52,11 +52,12 @@ spec:
 
 The token needs access to these Admin API endpoints:
 
-| Used by                      | Endpoints                                                                      |
-|------------------------------|--------------------------------------------------------------------------------|
-| `S3Connection`               | `GetClusterHealth`                                                             |
-| [`Bucket`](bucket.md)        | `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket`, `DeleteBucket` |
-| [`AccessKey`](access-key.md) | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
+| Used by                            | Endpoints                                                                      |
+|------------------------------------|--------------------------------------------------------------------------------|
+| `S3Connection`                     | `GetClusterHealth`                                                             |
+| [`Bucket`](bucket.md)              | `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket`, `DeleteBucket` |
+| [`AccessKey`](access-key.md)       | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
+| [`BucketAccess`](bucket-access.md) | `ListBuckets`, `GetBucketInfo`, `AllowBucketKey`, `DenyBucketKey`              |
 
 The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 

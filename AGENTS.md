@@ -36,6 +36,9 @@ When in doubt about a pattern, look there first.
 ## 🚀 Project Overview
 
 - **Stack**: Java 25, Quarkus, the Quarkus Operator SDK and the fabric8 Kubernetes client.
+- **Custom Resources** (`garage.aboutbits.it/v1`): `GarageCluster`, `S3Connection`, `Bucket`, `AccessKey` and
+  `BucketAccess`, one package each under `operator/src/main/java/it/aboutbits/garage/crd`, and one page each in
+  [`docs/`](./docs).
 - **Generated artifacts**: the CRDs and the Helm chart are generated from the code at build time, into
   `operator/build/kubernetes` and `operator/build/helm`. Change the Java classes or `application.yml`, never the output.
 - **Backend**: Garage only, driven through its Admin API v2. `GarageService` in `core/adminapi` is what the
@@ -44,6 +47,8 @@ When in doubt about a pattern, look there first.
 - **Backend identity**: once a bucket or key is created or adopted, its id is recorded in the status and it is
   addressed by that id — Garage key names are not unique. The name is used again only when that id is gone from the
   backend: the bucket or key is then adopted by name, or created anew.
+- **Security model**: the Custom Resources are for cluster administrators only, see "Security model" in the
+  [`README.md`](./README.md).
 - **Tests**: `@QuarkusTest` integration tests against a K3s cluster and a real Garage node, both provided by Quarkus
   Dev Services, so Docker is required. Prefer a test against the real Garage over a mock: what matters is how the
   Admin API actually behaves.
