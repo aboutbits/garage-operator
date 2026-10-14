@@ -71,6 +71,11 @@ tasks.withType<Test>().configureEach {
     dependsOn(tasks.quarkusAppPartsBuild)
 
     jvmArgumentProviders.add(MockitoArgumentProvider(mockitoAgentProvider))
+
+    // The fabric8 client re-reads the kubeconfig on token refresh. A developer kubeconfig with an exec plugin
+    // (e.g. `aws eks get-token`) then runs that plugin before many requests, which slows every test against the
+    // Dev Services cluster. The tests use only the Dev Services cluster, so they must not see that file at all.
+    environment("KUBECONFIG", layout.buildDirectory.file("no-kubeconfig").get().asFile.absolutePath)
 }
 
 class MockitoArgumentProvider(
