@@ -12,8 +12,8 @@ import it.aboutbits.garage.core.CRPhase;
 import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.core.adminapi.GarageAdminApi;
 import it.aboutbits.garage.core.adminapi.GarageAdminClientFactory;
+import it.aboutbits.garage.core.KubernetesService;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
-import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,9 +32,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import static it.aboutbits.garage._support.testdata.base.TestUtil.AWAIT_SECONDS;
+import static it.aboutbits.garage._support.testdata.base.TestUtil.awaitPhase;
+import static it.aboutbits.garage.core.BaseReconciler.RETRY_SECONDS;
 import static it.aboutbits.garage.crd.accesskey.AccessKeyReconciler.SECRET_DATA_ACCESS_KEY_ID;
 import static it.aboutbits.garage.crd.accesskey.AccessKeyReconciler.SECRET_DATA_SECRET_ACCESS_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,8 +53,6 @@ import static org.awaitility.Awaitility.await;
 @RequiredArgsConstructor
 @NullMarked
 class AccessKeyReconcilerTest {
-    private static final long AWAIT_SECONDS = 60;
-
     private final KubernetesClient kubernetesClient;
 
     private final Given given;
@@ -100,68 +102,6 @@ class AccessKeyReconcilerTest {
         }
     }
 
-    private AccessKey awaitPhase(
-            AccessKey accessKey,
-            CRPhase expectedPhase
-    ) {
-        //noinspection ConstantConditions
-        return kubernetesClient.resources(AccessKey.class)
-                .inNamespace(accessKey.getMetadata().getNamespace())
-                .withName(accessKey.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == expectedPhase,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    private void givenAppliedLayout() {
-        var garageCluster = given.one()
-                .garageCluster()
-                .returnFirst();
-
-        //noinspection ConstantConditions
-        kubernetesClient.resources(GarageCluster.class)
-                .inNamespace(garageCluster.getMetadata().getNamespace())
-                .withName(garageCluster.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == CRPhase.READY,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    private ResourceRef givenReadyConnection() {
-        givenAppliedLayout();
-
-        var s3Connection = given.one()
-                .s3Connection()
-                .returnFirst();
-
-        //noinspection ConstantConditions
-        kubernetesClient.resources(S3Connection.class)
-                .inNamespace(s3Connection.getMetadata().getNamespace())
-                .withName(s3Connection.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == CRPhase.READY,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-
-        var connectionRef = new ResourceRef();
-
-        connectionRef.setName(s3Connection.getMetadata().getName());
-        connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
-
-        return connectionRef;
-    }
-
     private @Nullable Secret secret(String name) {
         return kubernetesClient.secrets()
                 .inNamespace(kubernetesClient.getNamespace())
@@ -194,7 +134,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("An AccessKey should be created and its credentials written to a Secret")
         void accessKey_isCreatedWithSecret() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var accessKey = given.one()
@@ -204,7 +144,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(accessKey, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var status = reconciled.getStatus();
 
@@ -225,7 +165,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("The secret half of the credentials should never appear in the status")
         void secret_isNotInStatus() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var accessKey = given.one()
@@ -235,20 +175,21 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(accessKey, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var secret = requireSecret(accessKey.getMetadata().getName());
 
             var secretAccessKey = decode(secret, SECRET_DATA_SECRET_ACCESS_KEY);
 
-            assertThat(reconciled.getStatus().getMessage()).doesNotContain(secretAccessKey);
+            assertThat(kubernetesClient.getKubernetesSerialization().asJson(reconciled.getStatus()))
+                    .doesNotContain(secretAccessKey);
         }
 
         @Test
-        @DisplayName("A custom secretName should be honoured")
-        void customSecretName_isHonoured() {
+        @DisplayName("A custom secretName should be honored")
+        void customSecretName_isHonored() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var accessKey = given.one()
@@ -259,7 +200,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(accessKey, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getSecretName()).isEqualTo("my-own-credentials");
             assertThat(secret("my-own-credentials")).isNotNull();
@@ -269,7 +210,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("The Secret should be owned by the AccessKey so it is collected with it")
         void secret_isOwnedByAccessKey() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var accessKey = given.one()
@@ -279,7 +220,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var secret = requireSecret(accessKey.getMetadata().getName());
 
@@ -298,7 +239,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("A deleted Secret should be written again from the backend")
         void deletedSecret_isRebuilt() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var accessKey = given.one()
                     .accessKey()
@@ -306,7 +247,7 @@ class AccessKeyReconcilerTest {
                     .withKeyName("test-rebuilt-key")
                     .returnFirst();
 
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var secretName = accessKey.getMetadata().getName();
             var original = requireSecret(secretName);
@@ -336,7 +277,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("A Secret edited by hand should be put back")
         void editedSecret_isRestored() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var accessKey = given.one()
                     .accessKey()
@@ -344,7 +285,7 @@ class AccessKeyReconcilerTest {
                     .withKeyName("test-restored-key")
                     .returnFirst();
 
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var secretName = accessKey.getMetadata().getName();
             var originalSecretAccessKey = decode(requireSecret(secretName), SECRET_DATA_SECRET_ACCESS_KEY);
@@ -378,7 +319,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("An existing key should be adopted rather than duplicated")
         void existingKey_isAdopted() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // Someone created it out of band, before the CR existed.
             var created = garageAdminApi().createKey(
@@ -393,10 +334,155 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(accessKey, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getAccessKeyId()).isEqualTo(created.accessKeyId());
             assertThat(garageAdminApi().listKeys()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("A key deleted on the backend should be created again, and its new credentials written to the Secret")
+        void deletedKey_isCreatedAgain() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-recreated-key")
+                    .returnFirst();
+
+            var originalAccessKeyId = Objects.requireNonNull(
+                    awaitPhase(kubernetesClient, accessKey, CRPhase.READY).getStatus().getAccessKeyId()
+            );
+
+            garageAdminApi().deleteKey(originalAccessKeyId);
+
+            // when
+            // A change of the spec makes the operator look again now, not at the next resync.
+            var updated = given.one()
+                    .accessKey()
+                    .withName(accessKey.getMetadata().getName())
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-recreated-key")
+                    .withAllowCreateBucket(true)
+                    .returnFirst();
+
+            // then
+            var reconciled = awaitPhase(kubernetesClient, updated, CRPhase.READY);
+
+            var accessKeyId = Objects.requireNonNull(reconciled.getStatus().getAccessKeyId());
+
+            assertThat(accessKeyId).isNotEqualTo(originalAccessKeyId);
+
+            assertThat(garageAdminApi().listKeys())
+                    .singleElement()
+                    .satisfies(key -> {
+                        assertThat(key.id()).isEqualTo(accessKeyId);
+                        assertThat(key.name()).isEqualTo("test-recreated-key");
+                    });
+
+            var secret = requireSecret(accessKey.getMetadata().getName());
+
+            assertThat(decode(secret, SECRET_DATA_ACCESS_KEY_ID)).isEqualTo(accessKeyId);
+            assertThat(decode(secret, SECRET_DATA_SECRET_ACCESS_KEY))
+                    .isEqualTo(garageAdminApi().getKeyInfo(accessKeyId, true).secretAccessKey());
+        }
+
+        @Test
+        @DisplayName("A Secret whose managed-by label was removed should be labeled again, so that a later deletion is still noticed")
+        void unlabeledSecret_isRelabeled() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-relabeled-key")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            var secretName = accessKey.getMetadata().getName();
+            var secret = kubernetesClient.secrets()
+                    .inNamespace(kubernetesClient.getNamespace())
+                    .withName(secretName);
+
+            // when
+            secret.edit(item -> {
+                item.getMetadata().getLabels().remove(KubernetesService.LABEL_MANAGED_BY);
+
+                return item;
+            });
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .untilAsserted(() -> assertThat(requireSecret(secretName).getMetadata().getLabels())
+                            .containsEntry(KubernetesService.LABEL_MANAGED_BY, KubernetesService.LABEL_MANAGED_BY_VALUE));
+
+            var relabeled = requireSecret(secretName);
+
+            // when
+            secret.delete();
+
+            // then
+            // Well before the periodic reconciliation: the label puts the Secret back under watch.
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .untilAsserted(() -> assertThat(requireSecret(secretName).getMetadata().getUid())
+                            .isNotEqualTo(relabeled.getMetadata().getUid()));
+        }
+
+        @Test
+        @DisplayName("A key added to the Secret by hand should be kept, and not make the operator write the Secret again")
+        void addedSecretKey_isKept() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-extended-key")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            var secretName = accessKey.getMetadata().getName();
+
+            // As a team would add the S3 endpoint, which the operator does not write.
+            kubernetesClient.secrets()
+                    .inNamespace(kubernetesClient.getNamespace())
+                    .resource(new SecretBuilder()
+                            .withNewMetadata()
+                            .withName(secretName)
+                            .endMetadata()
+                            .addToStringData("endpoint", "http://garage:3900")
+                            .build()
+                    )
+                    .fieldManager("kubectl-edit")
+                    .serverSideApply();
+
+            // when
+            // A change of the spec makes the operator reconcile now, with the added key in place.
+            var updated = given.one()
+                    .accessKey()
+                    .withName(accessKey.getMetadata().getName())
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-extended-key")
+                    .withAllowCreateBucket(true)
+                    .returnFirst();
+
+            // then
+            var reconciled = awaitPhase(kubernetesClient, updated, CRPhase.READY);
+
+            assertThat(Objects.toString(reconciled.getStatus().getMessage(), ""))
+                    .doesNotContain("Credentials written");
+
+            var secret = requireSecret(secretName);
+
+            assertThat(decode(secret, "endpoint")).isEqualTo("http://garage:3900");
+            assertThat(decode(secret, SECRET_DATA_ACCESS_KEY_ID)).isEqualTo(reconciled.getStatus().getAccessKeyId());
         }
     }
 
@@ -406,7 +492,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("allowCreateBucket should be applied on the backend")
         void allowCreateBucket_isApplied() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var accessKey = given.one()
@@ -417,7 +503,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(accessKey, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var keyInfo = garageAdminApi().getKeyInfo(
                     Objects.requireNonNull(reconciled.getStatus().getAccessKeyId()),
@@ -431,7 +517,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("Revoking allowCreateBucket should be applied on the backend")
         void revokedCreateBucket_isApplied() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var accessKey = given.one()
                     .accessKey()
@@ -440,7 +526,7 @@ class AccessKeyReconcilerTest {
                     .withAllowCreateBucket(true)
                     .returnFirst();
 
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             // when
             var revoked = given.one()
@@ -452,7 +538,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(revoked, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, revoked, CRPhase.READY);
 
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
@@ -471,7 +557,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("Deleting an AccessKey should delete the key and its Secret")
         void deletedAccessKey_removesKeyAndSecret() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var accessKey = given.one()
                     .accessKey()
@@ -479,7 +565,7 @@ class AccessKeyReconcilerTest {
                     .withKeyName("test-deleted-key")
                     .returnFirst();
 
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var secretName = accessKey.getMetadata().getName();
 
@@ -506,7 +592,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("A second AccessKey for a key that is already managed should be refused, and deleting it should leave the key alone")
         void secondAccessKeyForManagedKey_isRefused() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var first = given.one()
                     .accessKey()
@@ -515,7 +601,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             var firstAccessKeyId = Objects.requireNonNull(
-                    awaitPhase(first, CRPhase.READY).getStatus().getAccessKeyId()
+                    awaitPhase(kubernetesClient, first, CRPhase.READY).getStatus().getAccessKeyId()
             );
 
             // when
@@ -526,7 +612,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var refused = awaitPhase(second, CRPhase.ERROR);
+            var refused = awaitPhase(kubernetesClient, second, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("already managed by AccessKey");
             assertThat(refused.getStatus().getAccessKeyId()).isNull();
@@ -545,7 +631,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("A name that more than one key carries should be refused rather than guessed")
         void ambiguousName_isRefused() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             garageAdminApi().createKey(UpdateKeyRequestBody.named("test-twin-key"));
             garageAdminApi().createKey(UpdateKeyRequestBody.named("test-twin-key"));
@@ -558,7 +644,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var refused = awaitPhase(accessKey, CRPhase.ERROR);
+            var refused = awaitPhase(kubernetesClient, accessKey, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("More than one access key is named test-twin-key");
             assertThat(garageAdminApi().listKeys()).hasSize(2);
@@ -569,7 +655,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("Deleting an AccessKey should delete its key even if the key was renamed on the backend")
         void renamedKey_isStillDeleted() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var accessKey = given.one()
                     .accessKey()
@@ -578,7 +664,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             var accessKeyId = Objects.requireNonNull(
-                    awaitPhase(accessKey, CRPhase.READY).getStatus().getAccessKeyId()
+                    awaitPhase(kubernetesClient, accessKey, CRPhase.READY).getStatus().getAccessKeyId()
             );
 
             garageAdminApi().updateKey(accessKeyId, UpdateKeyRequestBody.named("renamed-out-of-band"));
@@ -592,10 +678,10 @@ class AccessKeyReconcilerTest {
         }
 
         @Test
-        @DisplayName("An existing Secret the AccessKey does not own should be left untouched")
+        @DisplayName("An existing Secret the AccessKey does not own should be left untouched, and no key be created")
         void unownedSecret_isLeftUntouched() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             kubernetesClient.secrets()
                     .inNamespace(kubernetesClient.getNamespace())
@@ -618,7 +704,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var refused = awaitPhase(accessKey, CRPhase.ERROR);
+            var refused = awaitPhase(kubernetesClient, accessKey, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("not owned by this resource");
 
@@ -627,15 +713,14 @@ class AccessKeyReconcilerTest {
             assertThat(secret.getMetadata().getOwnerReferences()).isNullOrEmpty();
             assertThat(secret.getData()).containsOnlyKeys("unrelated");
 
-            // The key was created before the Secret was refused. It is recorded, so deleting the
-            // AccessKey still cleans it up rather than leaving a live credential behind.
-            assertThat(refused.getStatus().getAccessKeyId()).isNotNull();
+            // Refused before the key is created, so no key is left whose secret nobody can read.
+            assertThat(refused.getStatus().getAccessKeyId()).isNull();
+            assertThat(garageAdminApi().listKeys()).isEmpty();
 
             // when
             TestUtil.deleteResource(kubernetesClient, AccessKey.class);
 
             // then
-            assertThat(garageAdminApi().listKeys()).isEmpty();
             assertThat(secret("test-foreign-secret")).isNotNull();
 
             kubernetesClient.secrets()
@@ -651,7 +736,7 @@ class AccessKeyReconcilerTest {
         @DisplayName("Changing the connectionRef should be rejected by the API server")
         void changedConnectionRef_isRejected() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var accessKey = given.one()
                     .accessKey()
@@ -659,12 +744,12 @@ class AccessKeyReconcilerTest {
                     .withKeyName("test-pinned-key")
                     .returnFirst();
 
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             var otherConnectionRef = new ResourceRef();
 
-            otherConnectionRef.setName("another-connection");
             otherConnectionRef.setNamespace(connectionRef.getNamespace());
+            otherConnectionRef.setName("another-connection");
 
             // when
             var thrown = catchThrowable(
@@ -681,6 +766,180 @@ class AccessKeyReconcilerTest {
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("connectionRef is immutable");
         }
+
+        @Test
+        @DisplayName("Changing the name should be rejected by the API server")
+        void changedName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-named-key")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .accessKey()
+                            .withName(accessKey.getMetadata().getName())
+                            .withConnectionRef(connectionRef)
+                            .withKeyName("test-renamed-key")
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The AccessKey name is immutable");
+        }
+
+        @Test
+        @DisplayName("Changing the secretName should be rejected by the API server")
+        void changedSecretName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-pinned-secret-key")
+                    .withSecretName("app-s3")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .accessKey()
+                            .withName(accessKey.getMetadata().getName())
+                            .withConnectionRef(connectionRef)
+                            .withKeyName("test-pinned-secret-key")
+                            .withSecretName("app-s3-v2")
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The secretName is immutable");
+        }
+
+        @Test
+        @DisplayName("Setting a secretName that was left out should be rejected by the API server")
+        void addedSecretName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-default-secret-key")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .accessKey()
+                            .withName(accessKey.getMetadata().getName())
+                            .withConnectionRef(connectionRef)
+                            .withKeyName("test-default-secret-key")
+                            .withSecretName("app-s3")
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The secretName is immutable");
+        }
+
+        @Test
+        @DisplayName("Removing the secretName should be rejected by the API server")
+        void removedSecretName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-dropped-secret-key")
+                    .withSecretName("app-s3")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .accessKey()
+                            .withName(accessKey.getMetadata().getName())
+                            .withConnectionRef(connectionRef)
+                            .withKeyName("test-dropped-secret-key")
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The secretName is immutable");
+        }
+    }
+
+    @Nested
+    class Naming {
+        @Test
+        @DisplayName("A blank key name should be rejected by the API server")
+        void blankName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .accessKey()
+                            .withConnectionRef(connectionRef)
+                            .withKeyName(" ")
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("spec.name")
+                    .hasMessageContaining("The AccessKey name must not be empty.");
+        }
+
+        @Test
+        @DisplayName("A blank or invalid secretName should be rejected by the API server")
+        void invalidSecretName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            assertThat(List.of("", " ", "Not_A_Name"))
+                    .allSatisfy(invalidSecretName -> {
+                        // when
+                        var thrown = catchThrowable(
+                                () -> given.one()
+                                        .accessKey()
+                                        .withConnectionRef(connectionRef)
+                                        .withSecretName(invalidSecretName)
+                                        .returnFirst()
+                        );
+
+                        // then
+                        assertThat(thrown)
+                                .as("Expected the secretName to be rejected: '%s'", invalidSecretName)
+                                .isInstanceOf(RuntimeException.class)
+                                .hasMessageContaining("spec.secretName");
+                    });
+        }
     }
 
     @Nested
@@ -689,8 +948,6 @@ class AccessKeyReconcilerTest {
         @DisplayName("Deleting a namespace whose S3Connection is already gone should not be blocked by its AccessKeys")
         void namespaceDeletion_isNotBlocked() {
             // given
-            givenAppliedLayout();
-
             var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
 
             kubernetesClient.namespaces()
@@ -702,27 +959,7 @@ class AccessKeyReconcilerTest {
                     )
                     .create();
 
-            var s3Connection = given.one()
-                    .s3Connection()
-                    .withNamespace(namespace)
-                    .returnFirst();
-
-            //noinspection ConstantConditions
-            kubernetesClient.resources(S3Connection.class)
-                    .inNamespace(namespace)
-                    .withName(s3Connection.getMetadata().getName())
-                    .waitUntilCondition(
-                            item -> item != null
-                                    && item.getStatus() != null
-                                    && item.getStatus().getPhase() == CRPhase.READY,
-                            AWAIT_SECONDS,
-                            TimeUnit.SECONDS
-                    );
-
-            var connectionRef = new ResourceRef();
-
-            connectionRef.setName(s3Connection.getMetadata().getName());
-            connectionRef.setNamespace(namespace);
+            var connectionRef = given.readyConnection(namespace);
 
             var accessKey = given.one()
                     .accessKey()
@@ -731,14 +968,14 @@ class AccessKeyReconcilerTest {
                     .withKeyName("test-teardown-key")
                     .returnFirst();
 
-            awaitPhase(accessKey, CRPhase.READY);
+            awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
             // when
             // What namespace deletion does to a Garage installed in that namespace: the
             // connection goes away, independently of anything that depends on it.
             kubernetesClient.resources(S3Connection.class)
                     .inNamespace(namespace)
-                    .withName(s3Connection.getMetadata().getName())
+                    .withName(connectionRef.getName())
                     .delete();
 
             kubernetesClient.namespaces()
@@ -749,6 +986,75 @@ class AccessKeyReconcilerTest {
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .until(() -> kubernetesClient.namespaces().withName(namespace).get() == null);
+
+            // Released without the backend: nothing could delete the key without its connection.
+            assertThat(garageAdminApi().listKeys())
+                    .anySatisfy(key -> assertThat(key.name()).isEqualTo("test-teardown-key"));
+        }
+
+        @Test
+        @DisplayName("An AccessKey whose S3Connection is gone should wait for it, and delete the key once it is back")
+        void lostConnection_blocksDeletionUntilBack() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-orphaned-key")
+                    .returnFirst();
+
+            var accessKeyId = Objects.requireNonNull(
+                    awaitPhase(kubernetesClient, accessKey, CRPhase.READY).getStatus().getAccessKeyId()
+            );
+
+            var s3Connection = kubernetesClient.resources(S3Connection.class)
+                    .inNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName());
+
+            s3Connection.delete();
+
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> s3Connection.get() == null);
+
+            var resource = kubernetesClient.resources(AccessKey.class)
+                    .inNamespace(accessKey.getMetadata().getNamespace())
+                    .withName(accessKey.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            //noinspection ConstantConditions
+            var blocked = resource.waitUntilCondition(
+                    item -> item != null
+                            && item.getStatus() != null
+                            && item.getStatus().getMessage() != null
+                            && item.getStatus().getMessage().contains("no longer exists or is not ready yet"),
+                    AWAIT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+
+            assertThat(blocked.getStatus().getPhase()).isEqualTo(CRPhase.DELETING);
+            assertThat(garageAdminApi().listKeys())
+                    .anySatisfy(key -> assertThat(key.id()).isEqualTo(accessKeyId));
+
+            // when
+            given.one()
+                    .s3Connection()
+                    .withNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName())
+                    .returnFirst();
+
+            // then
+            // The AccessKey does not watch its S3Connection, so only the retry of the cleanup notices it.
+            await().atMost(RETRY_SECONDS + AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+
+            assertThat(garageAdminApi().listKeys())
+                    .noneSatisfy(key -> assertThat(key.id()).isEqualTo(accessKeyId));
         }
     }
 
@@ -770,12 +1076,12 @@ class AccessKeyReconcilerTest {
         @DisplayName("An AccessKey referencing an unknown S3Connection should stay pending")
         void unknownConnection_staysPending() {
             // given
-            givenAppliedLayout();
+            given.appliedLayout();
 
             var connectionRef = new ResourceRef();
 
-            connectionRef.setName("does-not-exist");
             connectionRef.setNamespace(kubernetesClient.getNamespace());
+            connectionRef.setName("does-not-exist");
 
             // when
             var accessKey = given.one()
@@ -785,7 +1091,7 @@ class AccessKeyReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(accessKey, CRPhase.PENDING);
+            var reconciled = awaitPhase(kubernetesClient, accessKey, CRPhase.PENDING);
 
             assertThat(reconciled.getStatus().getMessage()).contains("does not exist or is not ready yet");
             assertThat(garageAdminApi().listKeys()).isEmpty();

@@ -9,7 +9,6 @@ import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.crd.bucket.Bucket;
 import it.aboutbits.garage.crd.bucket.BucketQuotasSpec;
 import it.aboutbits.garage.crd.bucket.BucketSpec;
-import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -27,9 +26,6 @@ public class BucketCreate extends TestDataCreator<Bucket> {
 
     private @Nullable String withNamespace;
 
-    @Setter(AccessLevel.NONE)
-    private boolean withoutNamespace = false;
-
     private @Nullable String withName;
 
     private @Nullable String withBucketName;
@@ -42,9 +38,6 @@ public class BucketCreate extends TestDataCreator<Bucket> {
 
     private @Nullable Long withMaxObjects;
 
-    @Setter(AccessLevel.NONE)
-    private boolean withoutQuotas = false;
-
     public BucketCreate(
             int numberOfItems,
             Given given,
@@ -55,14 +48,10 @@ public class BucketCreate extends TestDataCreator<Bucket> {
         this.kubernetesClient = kubernetesClient;
     }
 
-    public BucketCreate withoutNamespace() {
-        this.withoutNamespace = true;
-        return this;
-    }
-
     /// Leave the quotas section out of the spec entirely.
     public BucketCreate withoutQuotas() {
-        this.withoutQuotas = true;
+        this.withMaxSize = null;
+        this.withMaxObjects = null;
         return this;
     }
 
@@ -74,8 +63,8 @@ public class BucketCreate extends TestDataCreator<Bucket> {
         var item = new Bucket();
 
         item.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
                 .withNamespace(namespace)
+                .withName(name)
                 .build()
         );
 
@@ -104,11 +93,7 @@ public class BucketCreate extends TestDataCreator<Bucket> {
                 );
     }
 
-    private @Nullable String getNamespace() {
-        if (withoutNamespace) {
-            return null;
-        }
-
+    private String getNamespace() {
         if (withNamespace != null) {
             return withNamespace;
         }
@@ -149,8 +134,8 @@ public class BucketCreate extends TestDataCreator<Bucket> {
 
         var connectionRef = new ResourceRef();
 
-        connectionRef.setName(s3Connection.getMetadata().getName());
         connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
+        connectionRef.setName(s3Connection.getMetadata().getName());
 
         withConnectionRef = connectionRef;
 
@@ -168,7 +153,7 @@ public class BucketCreate extends TestDataCreator<Bucket> {
     }
 
     private @Nullable BucketQuotasSpec getQuotas() {
-        if (withoutQuotas || (withMaxSize == null && withMaxObjects == null)) {
+        if (withMaxSize == null && withMaxObjects == null) {
             return null;
         }
 

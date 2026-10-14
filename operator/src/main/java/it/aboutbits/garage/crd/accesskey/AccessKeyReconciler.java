@@ -60,10 +60,8 @@ import java.util.concurrent.TimeUnit;
 public class AccessKeyReconciler
         extends BaseReconciler<AccessKey, AccessKeyStatus>
         implements Reconciler<AccessKey>, Cleaner<AccessKey> {
-    private static final long RETRY_SECONDS = 60;
-
-    public static final String SECRET_DATA_ACCESS_KEY_ID = "accessKeyId";
-    public static final String SECRET_DATA_SECRET_ACCESS_KEY = "secretAccessKey";
+    public static final String SECRET_DATA_ACCESS_KEY_ID = "AWS_ACCESS_KEY_ID";
+    public static final String SECRET_DATA_SECRET_ACCESS_KEY = "AWS_SECRET_ACCESS_KEY";
 
     private final KubernetesService kubernetesService;
 
@@ -207,15 +205,15 @@ public class AccessKeyReconciler
                 return DeleteControl.defaultDelete();
             }
 
-            status.setMessage("The specified S3Connection no longer exists or is not ready yet [resource=%s/%s]".formatted(
-                    getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
-                    connectionRef.getName()
-            ));
-
-            context.getClient().resource(resource).patchStatus();
-
-            return DeleteControl.noFinalizerRemoval()
-                    .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
+            return failCleanup(
+                    resource,
+                    status,
+                    context,
+                    "The specified S3Connection no longer exists or is not ready yet [resource=%s/%s]".formatted(
+                            getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
+                            connectionRef.getName()
+                    )
+            );
         }
 
         var s3Connection = s3ConnectionOptional.get();
@@ -251,12 +249,12 @@ public class AccessKeyReconciler
                     e
             );
 
-            status.setMessage("Deletion failed: %s".formatted(e.getMessage()));
-
-            context.getClient().resource(resource).patchStatus();
-
-            return DeleteControl.noFinalizerRemoval()
-                    .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
+            return failCleanup(
+                    resource,
+                    status,
+                    context,
+                    "Deletion failed: %s".formatted(e.getMessage())
+            );
         }
     }
 
@@ -283,10 +281,19 @@ public class AccessKeyReconciler
                 status
         );
 
+        var secretName = secretName(resource);
+
         AccessKeyInfo accessKey;
-        @Nullable String message;
+        String message;
 
         if (accessKeyOptional.isEmpty()) {
+            // Before the key is created: refused afterwards, it would leave a key whose secret nobody can read.
+            kubernetesService.requireNoForeignSecret(
+                    kubernetesClient,
+                    resource,
+                    secretName
+            );
+
             log.info(
                     "Creating AccessKey [resource={}/{}, spec.name={}]",
                     namespace,
@@ -327,8 +334,6 @@ public class AccessKeyReconciler
             message = "Access key permissions updated";
         }
 
-        var secretName = secretName(resource);
-
         var secretMessage = reconcileSecret(
                 resource,
                 accessKey,
@@ -360,7 +365,7 @@ public class AccessKeyReconciler
             }
 
             log.warn(
-                    "The recorded access key no longer exists on the backend, looking it up by name [resource={}/{}, recordedAccessKeyId={}]",
+                    "The recorded access key no longer exists on the backend, looking it up by name [resource={}/{}, status.accessKeyId={}]",
                     resource.getMetadata().getNamespace(),
                     resource.getMetadata().getName(),
                     recordedAccessKeyId
@@ -433,10 +438,9 @@ public class AccessKeyReconciler
         }
 
         log.info(
-                "Wrote AccessKey credentials [resource={}/{}, secret={}/{}]",
+                "Wrote AccessKey credentials [resource={}/{}, secretName={}]",
                 resource.getMetadata().getNamespace(),
                 resource.getMetadata().getName(),
-                resource.getMetadata().getNamespace(),
                 secretName
         );
 
@@ -446,7 +450,7 @@ public class AccessKeyReconciler
     private String secretName(AccessKey resource) {
         var secretName = resource.getSpec().getSecretName();
 
-        return secretName == null || secretName.isBlank()
+        return secretName == null
                 ? resource.getMetadata().getName()
                 : secretName;
     }

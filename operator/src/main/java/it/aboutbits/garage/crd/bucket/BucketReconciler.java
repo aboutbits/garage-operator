@@ -49,8 +49,6 @@ import java.util.concurrent.TimeUnit;
 public class BucketReconciler
         extends BaseReconciler<Bucket, BucketStatus>
         implements Reconciler<Bucket>, Cleaner<Bucket> {
-    private static final long RETRY_SECONDS = 60;
-
     private final BucketService bucketService;
 
     private final KubernetesClient kubernetesClient;
@@ -123,11 +121,11 @@ public class BucketReconciler
         var name = resource.getMetadata().getName();
 
         log.info(
-                "{}ing Bucket [resource={}/{}, spec.name={}, status.phase={}]",
-                spec.getReclaimPolicy().toValue(),
+                "Cleaning up Bucket [resource={}/{}, spec.name={}, spec.reclaimPolicy={}, status.phase={}]",
                 namespace,
                 name,
                 spec.getName(),
+                spec.getReclaimPolicy().toValue(),
                 status.getPhase()
         );
 
@@ -144,7 +142,6 @@ public class BucketReconciler
                     .rescheduleAfter(100, TimeUnit.MILLISECONDS);
         }
 
-        // Retain only removes the CR, the bucket stays on the backend
         if (spec.getReclaimPolicy() == ReclaimPolicy.RETAIN) {
             return DeleteControl.defaultDelete();
         }
@@ -202,7 +199,7 @@ public class BucketReconciler
 
             if (bucketOptional.isEmpty()) {
                 log.info(
-                        "The Bucket no longer exists on the backend, nothing to delete [resource={}/{}, bucketId={}]",
+                        "The bucket no longer exists on the backend, nothing to delete [resource={}/{}, bucketId={}]",
                         namespace,
                         name,
                         bucketId
@@ -304,7 +301,7 @@ public class BucketReconciler
 
             status.setBucketId(bucket.id());
 
-            if (bucketService.quotasMatch(bucket.quotas(), desiredQuotas)) {
+            if (bucket.quotas().equals(desiredQuotas)) {
                 log.info(
                         "Bucket up-to-date [resource={}/{}, spec.name={}]",
                         namespace,
@@ -358,7 +355,7 @@ public class BucketReconciler
             }
 
             log.warn(
-                    "The recorded bucket no longer exists on the backend, looking it up by name [resource={}/{}, recordedBucketId={}]",
+                    "The recorded bucket no longer exists on the backend, looking it up by name [resource={}/{}, status.bucketId={}]",
                     resource.getMetadata().getNamespace(),
                     resource.getMetadata().getName(),
                     recordedBucketId
@@ -390,7 +387,7 @@ public class BucketReconciler
             var other = managedElsewhere.get();
 
             throw new IllegalStateException(
-                    "The bucket named %s is already managed by Bucket %s/%s [bucketId=%s]".formatted(
+                    "The bucket named %s is already managed by Bucket %s/%s. Use a different spec.name [bucketId=%s]".formatted(
                             resource.getSpec().getName(),
                             other.getMetadata().getNamespace(),
                             other.getMetadata().getName(),
@@ -398,19 +395,5 @@ public class BucketReconciler
                     )
             );
         }
-    }
-
-    private DeleteControl failCleanup(
-            Bucket resource,
-            BucketStatus status,
-            Context<Bucket> context,
-            String message
-    ) {
-        status.setMessage(message);
-
-        context.getClient().resource(resource).patchStatus();
-
-        return DeleteControl.noFinalizerRemoval()
-                .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
     }
 }

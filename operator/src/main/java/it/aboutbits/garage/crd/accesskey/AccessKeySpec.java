@@ -1,5 +1,6 @@
 package it.aboutbits.garage.crd.accesskey;
 
+import io.fabric8.generator.annotation.Pattern;
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.Size;
 import io.fabric8.generator.annotation.ValidationRule;
@@ -11,6 +12,11 @@ import org.jspecify.annotations.Nullable;
 
 @Getter
 @Setter
+// The rule on secretName is skipped when the field is absent before or after, so setting or removing it is checked here.
+@ValidationRule(
+        value = "has(self.secretName) == has(oldSelf.secretName)",
+        message = "The secretName is immutable. Delete and recreate the AccessKey to use a different Secret name."
+)
 @NullMarked
 public class AccessKeySpec {
     @Required
@@ -36,6 +42,11 @@ public class AccessKeySpec {
     /// Defaults to `metadata.name`; always created in the AccessKey's own namespace.
     @io.fabric8.generator.annotation.Nullable
     @Size(max = 253)
+    @Pattern(ResourceRef.DNS_SUBDOMAIN_PATTERN)
+    @ValidationRule(
+            value = "self == oldSelf",
+            message = "The secretName is immutable. Delete and recreate the AccessKey to use a different Secret name."
+    )
     private @Nullable String secretName = null;
 
     private boolean allowCreateBucket = false;

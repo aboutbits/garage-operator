@@ -7,6 +7,7 @@ import io.fabric8.kubernetes.api.model.SecretBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import jakarta.inject.Singleton;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.charset.Charset;
 import java.util.Base64;
@@ -74,9 +75,21 @@ public final class KubernetesService {
         return token;
     }
 
+    /// A Secret the owner does not own is never taken over, as it would be garbage-collected with the owner.
+    public void requireNoForeignSecret(
+            KubernetesClient kubernetesClient,
+            HasMetadata owner,
+            String secretName
+    ) {
+        getOwnedSecret(
+                kubernetesClient,
+                owner,
+                secretName
+        );
+    }
+
     /// Always written into the owner's namespace: cross-namespace owner references are ignored,
-    /// leaving orphans with live credentials. A Secret the owner does not own is never taken over,
-    /// as it would be garbage-collected with the owner.
+    /// leaving orphans with live credentials.
     ///
     /// @return whether anything actually changed
     public boolean upsertOwnedSecret(
@@ -87,19 +100,14 @@ public final class KubernetesService {
     ) {
         var namespace = owner.getMetadata().getNamespace();
 
-        var existing = kubernetesClient.secrets()
-                .inNamespace(namespace)
-                .withName(secretName)
-                .get();
+        var existing = getOwnedSecret(
+                kubernetesClient,
+                owner,
+                secretName
+        );
 
-        if (existing != null && !isOwnedBy(existing, owner)) {
-            throw new IllegalStateException("A Secret of this name already exists and is not owned by this resource, so it is left untouched. Choose a different secretName, or delete the Secret [secret=%s/%s]".formatted(
-                    namespace,
-                    secretName
-            ));
-        }
-
-        if (existing != null && isUpToDate(existing, data)) {
+        // Without the label the Secret is outside the informer, so a later edit or delete would go unnoticed.
+        if (existing != null && hasManagedByLabel(existing) && isUpToDate(existing, data)) {
             return false;
         }
 
@@ -132,13 +140,42 @@ public final class KubernetesService {
         return true;
     }
 
+    private @Nullable Secret getOwnedSecret(
+            KubernetesClient kubernetesClient,
+            HasMetadata owner,
+            String secretName
+    ) {
+        var namespace = owner.getMetadata().getNamespace();
+
+        var existing = kubernetesClient.secrets()
+                .inNamespace(namespace)
+                .withName(secretName)
+                .get();
+
+        if (existing != null && !isOwnedBy(existing, owner)) {
+            throw new IllegalStateException("A Secret of this name already exists and is not owned by this resource, so it is left untouched. Choose a different secretName, or delete the Secret [secret=%s/%s]".formatted(
+                    namespace,
+                    secretName
+            ));
+        }
+
+        return existing;
+    }
+
+    private boolean hasManagedByLabel(Secret secret) {
+        var labels = secret.getMetadata().getLabels();
+
+        return labels != null && LABEL_MANAGED_BY_VALUE.equals(labels.get(LABEL_MANAGED_BY));
+    }
+
+    /// Only the keys the operator writes: server-side apply keeps keys added by hand, so they must not count as drift.
     private boolean isUpToDate(
             Secret secret,
             Map<String, String> data
     ) {
         var currentData = secret.getData();
 
-        if (currentData == null || currentData.size() != data.size()) {
+        if (currentData == null) {
             return false;
         }
 

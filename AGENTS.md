@@ -42,7 +42,8 @@ When in doubt about a pattern, look there first.
   reconcilers call; `GarageAdminApi` is the HTTP client underneath. The exception is `GarageClusterReconciler`: it
   builds the client from its own `adminEndpoint` and passes it to `GarageClusterService`.
 - **Backend identity**: once a bucket or key is created or adopted, its id is recorded in the status and it is
-  addressed by that id only, never by name — Garage key names are not unique.
+  addressed by that id — Garage key names are not unique. The name is used again only when that id is gone from the
+  backend: the bucket or key is then adopted by name, or created anew.
 - **Tests**: `@QuarkusTest` integration tests against a K3s cluster and a real Garage node, both provided by Quarkus
   Dev Services, so Docker is required. Prefer a test against the real Garage over a mock: what matters is how the
   Admin API actually behaves.

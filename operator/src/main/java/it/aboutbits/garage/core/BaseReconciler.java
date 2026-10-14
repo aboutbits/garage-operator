@@ -2,6 +2,8 @@ package it.aboutbits.garage.core;
 
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.extern.slf4j.Slf4j;
@@ -149,6 +151,20 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
                 .setMessage(exception.getMessage());
 
         return UpdateControl.patchStatus(resource)
+                .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
+    }
+
+    protected DeleteControl failCleanup(
+            CR resource,
+            S status,
+            Context<CR> context,
+            String message
+    ) {
+        status.setMessage(message);
+
+        context.getClient().resource(resource).patchStatus();
+
+        return DeleteControl.noFinalizerRemoval()
                 .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
     }
 }

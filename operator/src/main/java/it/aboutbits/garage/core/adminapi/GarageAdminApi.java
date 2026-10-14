@@ -19,8 +19,8 @@ import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
+import org.jboss.resteasy.reactive.RestQuery;
 import org.jspecify.annotations.NullMarked;
 
 import java.util.List;
@@ -60,7 +60,7 @@ public interface GarageAdminApi {
 
     @GET
     @Path("/GetBucketInfo")
-    GetBucketInfoResponse getBucketInfo(@QueryParam("id") String id);
+    GetBucketInfoResponse getBucketInfo(@RestQuery String id);
 
     @POST
     @Path("/CreateBucket")
@@ -70,14 +70,14 @@ public interface GarageAdminApi {
     @POST
     @Path("/UpdateBucket")
     GetBucketInfoResponse updateBucket(
-            @QueryParam("id") String id,
+            @RestQuery String id,
             UpdateBucketRequestBody request
     );
 
     /// Answers `409` if the bucket still holds objects.
     @POST
     @Path("/DeleteBucket")
-    void deleteBucket(@QueryParam("id") String id);
+    void deleteBucket(@RestQuery String id);
 
     @GET
     @Path("/ListKeys")
@@ -87,8 +87,8 @@ public interface GarageAdminApi {
     @GET
     @Path("/GetKeyInfo")
     GetKeyInfoResponse getKeyInfo(
-            @QueryParam("id") String id,
-            @QueryParam("showSecretKey") boolean showSecretKey
+            @RestQuery String id,
+            @RestQuery boolean showSecretKey
     );
 
     @POST
@@ -98,13 +98,13 @@ public interface GarageAdminApi {
     @POST
     @Path("/UpdateKey")
     GetKeyInfoResponse updateKey(
-            @QueryParam("id") String id,
+            @RestQuery String id,
             UpdateKeyRequestBody request
     );
 
     @POST
     @Path("/DeleteKey")
-    void deleteKey(@QueryParam("id") String id);
+    void deleteKey(@RestQuery String id);
 
     /// Unflagged permissions are left untouched.
     @POST

@@ -12,7 +12,6 @@ import org.jspecify.annotations.Nullable;
 
 @Getter
 @Setter
-// No @SchemaCustomizer: it would apply the Kubernetes name pattern to every field, including the S3 name.
 @NullMarked
 public class BucketSpec {
     @Required
@@ -33,10 +32,13 @@ public class BucketSpec {
             value = "self.matches('^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$')",
             message = "The Bucket name must be 3-63 characters of lowercase letters, digits, dots or hyphens, and must start and end with a letter or digit."
     )
+    @ValidationRule(
+            value = "!isIP(self) && !self.startsWith('xn--') && !self.contains('.xn--') && !self.endsWith('-s3alias')",
+            message = "The Bucket name must not be an IP address, must not start with 'xn--' or contain '.xn--', and must not end with '-s3alias'."
+    )
     private String name = "";
 
     /// A bucket that still holds objects is never deleted, whatever this is set to.
-    @io.fabric8.generator.annotation.Nullable
     private ReclaimPolicy reclaimPolicy = ReclaimPolicy.RETAIN;
 
     /// Omit for an unlimited bucket.

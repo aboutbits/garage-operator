@@ -1,7 +1,9 @@
 package it.aboutbits.garage.crd.bucket;
 
+import io.fabric8.kubernetes.api.model.NamespaceBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.junit.QuarkusTest;
+import it.aboutbits.garage._support.testdata.base.TestDataCreator;
 import it.aboutbits.garage._support.testdata.base.TestUtil;
 import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.CRPhase;
@@ -11,8 +13,8 @@ import it.aboutbits.garage.core.adminapi.GarageAdminApi;
 import it.aboutbits.garage.core.adminapi.GarageAdminClientFactory;
 import it.aboutbits.garage.core.adminapi.dto.ApiBucketKeyPerm;
 import it.aboutbits.garage.core.adminapi.dto.BucketKeyPermChangeRequest;
+import it.aboutbits.garage.core.adminapi.dto.CreateBucketRequest;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
-import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +45,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import static it.aboutbits.garage._support.testdata.base.TestUtil.AWAIT_SECONDS;
+import static it.aboutbits.garage._support.testdata.base.TestUtil.awaitPhase;
+import static it.aboutbits.garage.core.BaseReconciler.RETRY_SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
@@ -57,8 +62,6 @@ import static org.awaitility.Awaitility.await;
 @RequiredArgsConstructor
 @NullMarked
 class BucketReconcilerTest {
-    private static final long AWAIT_SECONDS = 60;
-
     /// Must match `s3_region` in the Dev Service's garage.toml.
     private static final Region GARAGE_REGION = Region.of("garage");
 
@@ -118,70 +121,6 @@ class BucketReconcilerTest {
         }
     }
 
-    private Bucket awaitPhase(
-            Bucket bucket,
-            CRPhase expectedPhase
-    ) {
-        //noinspection ConstantConditions
-        return kubernetesClient.resources(Bucket.class)
-                .inNamespace(bucket.getMetadata().getNamespace())
-                .withName(bucket.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == expectedPhase,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    /// Apply a cluster layout, without which Garage serves no bucket calls at all.
-    private void givenAppliedLayout() {
-        var garageCluster = given.one()
-                .garageCluster()
-                .returnFirst();
-
-        //noinspection ConstantConditions
-        kubernetesClient.resources(GarageCluster.class)
-                .inNamespace(garageCluster.getMetadata().getNamespace())
-                .withName(garageCluster.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == CRPhase.READY,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    /// Bring the cluster up and return a ready connection that buckets can reference.
-    private ResourceRef givenReadyConnection() {
-        givenAppliedLayout();
-
-        var s3Connection = given.one()
-                .s3Connection()
-                .returnFirst();
-
-        //noinspection ConstantConditions
-        kubernetesClient.resources(S3Connection.class)
-                .inNamespace(s3Connection.getMetadata().getNamespace())
-                .withName(s3Connection.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == CRPhase.READY,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-
-        var connectionRef = new ResourceRef();
-
-        connectionRef.setName(s3Connection.getMetadata().getName());
-        connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
-
-        return connectionRef;
-    }
-
     private S3Client s3Client(
             String accessKeyId,
             String secretAccessKey
@@ -190,8 +129,9 @@ class BucketReconcilerTest {
                 .endpointOverride(URI.create("http://localhost:%d".formatted(garageS3Port)))
                 .region(GARAGE_REGION)
                 .forcePathStyle(true)
-                // See BucketAccessReconcilerTest: Garage rejects the signed checksum trailer the SDK
-                // sends over plain HTTP by default.
+                // TODO: Remove these two lines once https://git.deuxfleurs.fr/Deuxfleurs/garage/issues/1549
+                //  is fixed. Garage rejects the signed checksum trailer that the AWS SDK sends over
+                //  plain HTTP by default.
                 .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
                 .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
                 .httpClient(UrlConnectionHttpClient.create())
@@ -213,7 +153,7 @@ class BucketReconcilerTest {
         @DisplayName("A Bucket should be created on the backend")
         void bucket_isCreated() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var bucket = given.one()
@@ -223,7 +163,7 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(bucket, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getBucketId()).isNotBlank();
             assertThat(reconciled.getStatus().getObjects()).isZero();
@@ -235,7 +175,7 @@ class BucketReconcilerTest {
         @DisplayName("A Bucket with quotas should have them applied on the backend")
         void quotas_areApplied() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // when
             var bucket = given.one()
@@ -247,7 +187,7 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            awaitPhase(bucket, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             var bucketId = garageAdminApi().listBuckets().stream()
                     .filter(item -> item.globalAliases().contains("test-quota-bucket"))
@@ -265,11 +205,11 @@ class BucketReconcilerTest {
         @DisplayName("An existing bucket should be adopted rather than reported as an error")
         void existingBucket_isAdopted() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             // Someone created it out of band, before the CR existed.
-            garageAdminApi().createBucket(
-                    new it.aboutbits.garage.core.adminapi.dto.CreateBucketRequest("test-adopted-bucket")
+            var created = garageAdminApi().createBucket(
+                    new CreateBucketRequest("test-adopted-bucket")
             );
 
             // when
@@ -280,9 +220,9 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(bucket, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
-            assertThat(reconciled.getStatus().getBucketId()).isNotBlank();
+            assertThat(reconciled.getStatus().getBucketId()).isEqualTo(created.id());
             assertThat(garageAdminApi().listBuckets()).hasSize(1);
         }
     }
@@ -293,16 +233,17 @@ class BucketReconcilerTest {
         @DisplayName("Changing the quotas should update them on the backend")
         void changedQuotas_areUpdated() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var bucket = given.one()
                     .bucket()
                     .withConnectionRef(connectionRef)
                     .withBucketName("test-requota-bucket")
+                    .withMaxSize("1Gi")
                     .withMaxObjects(100L)
                     .returnFirst();
 
-            awaitPhase(bucket, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             // when
             var updated = given.one()
@@ -310,39 +251,36 @@ class BucketReconcilerTest {
                     .withName(bucket.getMetadata().getName())
                     .withConnectionRef(connectionRef)
                     .withBucketName("test-requota-bucket")
+                    .withMaxSize("2Gi")
                     .withMaxObjects(250L)
                     .returnFirst();
 
             // then
-            awaitPhase(updated, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, updated, CRPhase.READY);
 
-            var bucketId = garageAdminApi().listBuckets().stream()
-                    .filter(item -> item.globalAliases().contains("test-requota-bucket"))
-                    .findFirst()
-                    .orElseThrow()
-                    .id();
+            var quotas = garageAdminApi().getBucketInfo(
+                    Objects.requireNonNull(reconciled.getStatus().getBucketId())
+            ).quotas();
 
-            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
-                    .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .untilAsserted(() -> assertThat(
-                            garageAdminApi().getBucketInfo(bucketId).quotas().maxObjects()
-                    ).isEqualTo(250L));
+            assertThat(quotas.maxSize()).isEqualTo(2147483648L);
+            assertThat(quotas.maxObjects()).isEqualTo(250L);
         }
 
         @Test
         @DisplayName("Removing the quotas should lift the limits on the backend")
         void removedQuotas_areLifted() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var bucket = given.one()
                     .bucket()
                     .withConnectionRef(connectionRef)
                     .withBucketName("test-unquota-bucket")
+                    .withMaxSize("1Gi")
                     .withMaxObjects(100L)
                     .returnFirst();
 
-            awaitPhase(bucket, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             // when
             var updated = given.one()
@@ -354,19 +292,59 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            awaitPhase(updated, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, updated, CRPhase.READY);
 
-            var bucketId = garageAdminApi().listBuckets().stream()
-                    .filter(item -> item.globalAliases().contains("test-unquota-bucket"))
-                    .findFirst()
-                    .orElseThrow()
-                    .id();
+            var quotas = garageAdminApi().getBucketInfo(
+                    Objects.requireNonNull(reconciled.getStatus().getBucketId())
+            ).quotas();
 
-            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
-                    .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .untilAsserted(() -> assertThat(
-                            garageAdminApi().getBucketInfo(bucketId).quotas().maxObjects()
-                    ).isNull());
+            assertThat(quotas.maxSize()).isNull();
+            assertThat(quotas.maxObjects()).isNull();
+        }
+    }
+
+    @Nested
+    class Recovery {
+        @Test
+        @DisplayName("A bucket deleted on the backend should be created again under the name from the spec")
+        void deletedBucket_isCreatedAgain() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var bucket = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-recreated-bucket")
+                    .withMaxObjects(100L)
+                    .returnFirst();
+
+            var originalBucketId = Objects.requireNonNull(
+                    awaitPhase(kubernetesClient, bucket, CRPhase.READY).getStatus().getBucketId()
+            );
+
+            garageAdminApi().deleteBucket(originalBucketId);
+
+            // when
+            // A change of the spec makes the operator look again now, not at the next resync.
+            var updated = given.one()
+                    .bucket()
+                    .withName(bucket.getMetadata().getName())
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-recreated-bucket")
+                    .withMaxObjects(250L)
+                    .returnFirst();
+
+            // then
+            var reconciled = awaitPhase(kubernetesClient, updated, CRPhase.READY);
+
+            var bucketId = Objects.requireNonNull(reconciled.getStatus().getBucketId());
+
+            assertThat(bucketId).isNotEqualTo(originalBucketId);
+
+            var info = garageAdminApi().getBucketInfo(bucketId);
+
+            assertThat(info.globalAliases()).containsExactly("test-recreated-bucket");
+            assertThat(info.quotas().maxObjects()).isEqualTo(250L);
         }
     }
 
@@ -376,7 +354,7 @@ class BucketReconcilerTest {
         @DisplayName("A Retain Bucket should leave the bucket behind when the CR is deleted")
         void retainPolicy_keepsBucket() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var bucket = given.one()
                     .bucket()
@@ -385,7 +363,7 @@ class BucketReconcilerTest {
                     .withReclaimPolicy(ReclaimPolicy.RETAIN)
                     .returnFirst();
 
-            awaitPhase(bucket, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             // when
             TestUtil.deleteResource(kubernetesClient, Bucket.class);
@@ -398,7 +376,7 @@ class BucketReconcilerTest {
         @DisplayName("A Delete Bucket should remove the bucket when the CR is deleted")
         void deletePolicy_removesBucket() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var bucket = given.one()
                     .bucket()
@@ -407,7 +385,7 @@ class BucketReconcilerTest {
                     .withReclaimPolicy(ReclaimPolicy.DELETE)
                     .returnFirst();
 
-            awaitPhase(bucket, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             // when
             TestUtil.deleteResource(kubernetesClient, Bucket.class);
@@ -420,7 +398,7 @@ class BucketReconcilerTest {
         @DisplayName("A Delete Bucket that still holds objects should be kept, and released once switched to Retain")
         void nonEmptyBucket_isKept() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var bucket = given.one()
                     .bucket()
@@ -429,7 +407,7 @@ class BucketReconcilerTest {
                     .withReclaimPolicy(ReclaimPolicy.DELETE)
                     .returnFirst();
 
-            var bucketId = Objects.requireNonNull(awaitPhase(bucket, CRPhase.READY).getStatus().getBucketId());
+            var bucketId = Objects.requireNonNull(awaitPhase(kubernetesClient, bucket, CRPhase.READY).getStatus().getBucketId());
 
             // A key of its own, so the bucket can be filled over S3.
             var writerKey = garageAdminApi().createKey(UpdateKeyRequestBody.named("test-writer-key"));
@@ -488,6 +466,153 @@ class BucketReconcilerTest {
                 garageAdminApi().deleteKey(writerKey.accessKeyId());
             }
         }
+
+        @Test
+        @DisplayName("A Delete Bucket whose S3Connection is gone should wait for it, and delete the bucket once it is back")
+        void lostConnection_blocksDeletionUntilBack() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var bucket = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-orphaned-bucket")
+                    .withReclaimPolicy(ReclaimPolicy.DELETE)
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
+
+            var s3Connection = kubernetesClient.resources(S3Connection.class)
+                    .inNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName());
+
+            s3Connection.delete();
+
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> s3Connection.get() == null);
+
+            var resource = kubernetesClient.resources(Bucket.class)
+                    .inNamespace(bucket.getMetadata().getNamespace())
+                    .withName(bucket.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            //noinspection ConstantConditions
+            var blocked = resource.waitUntilCondition(
+                    item -> item != null
+                            && item.getStatus() != null
+                            && item.getStatus().getMessage() != null
+                            && item.getStatus().getMessage().contains("no longer exists or is not ready yet"),
+                    AWAIT_SECONDS,
+                    TimeUnit.SECONDS
+            );
+
+            assertThat(blocked.getStatus().getPhase()).isEqualTo(CRPhase.DELETING);
+            assertThat(bucketExists("test-orphaned-bucket")).isTrue();
+
+            // when
+            given.one()
+                    .s3Connection()
+                    .withNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName())
+                    .returnFirst();
+
+            // then
+            // The Bucket does not watch its S3Connection, so only the retry of the cleanup notices it.
+            await().atMost(RETRY_SECONDS + AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+
+            assertThat(bucketExists("test-orphaned-bucket")).isFalse();
+        }
+
+        @Test
+        @DisplayName("A Delete Bucket that never reached the backend should be released even without its S3Connection")
+        void neverCreatedBucket_isReleasedWithoutConnection() {
+            // given
+            var connectionRef = new ResourceRef();
+
+            connectionRef.setNamespace(kubernetesClient.getNamespace());
+            connectionRef.setName("does-not-exist");
+
+            var bucket = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-unborn-bucket")
+                    .withReclaimPolicy(ReclaimPolicy.DELETE)
+                    .returnFirst();
+
+            var pending = awaitPhase(kubernetesClient, bucket, CRPhase.PENDING);
+
+            // precondition: with a recorded bucket, the cleanup would wait for the connection instead
+            assertThat(pending.getStatus().getBucketId()).isNull();
+
+            var resource = kubernetesClient.resources(Bucket.class)
+                    .inNamespace(bucket.getMetadata().getNamespace())
+                    .withName(bucket.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+        }
+    }
+
+    @Nested
+    class Teardown {
+        @Test
+        @DisplayName("Deleting a namespace whose S3Connection is already gone should not be blocked by its Buckets")
+        void namespaceDeletion_isNotBlocked() {
+            // given
+            var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
+
+            kubernetesClient.namespaces()
+                    .resource(new NamespaceBuilder()
+                            .withNewMetadata()
+                            .withName(namespace)
+                            .endMetadata()
+                            .build()
+                    )
+                    .create();
+
+            var connectionRef = given.readyConnection(namespace);
+
+            var bucket = given.one()
+                    .bucket()
+                    .withNamespace(namespace)
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-teardown-bucket")
+                    .withReclaimPolicy(ReclaimPolicy.DELETE)
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
+
+            // when
+            // What namespace deletion does to a Garage installed in that namespace: the
+            // connection goes away, independently of anything that depends on it.
+            kubernetesClient.resources(S3Connection.class)
+                    .inNamespace(namespace)
+                    .withName(connectionRef.getName())
+                    .delete();
+
+            kubernetesClient.namespaces()
+                    .withName(namespace)
+                    .delete();
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> kubernetesClient.namespaces().withName(namespace).get() == null);
+
+            // Released without the backend: nothing could delete the bucket without its connection.
+            assertThat(bucketExists("test-teardown-bucket")).isTrue();
+        }
     }
 
     @Nested
@@ -496,12 +621,12 @@ class BucketReconcilerTest {
         @DisplayName("A Bucket referencing an unknown S3Connection should stay pending")
         void unknownConnection_staysPending() {
             // given
-            givenAppliedLayout();
+            given.appliedLayout();
 
             var connectionRef = new ResourceRef();
 
-            connectionRef.setName("does-not-exist");
             connectionRef.setNamespace(kubernetesClient.getNamespace());
+            connectionRef.setName("does-not-exist");
 
             // when
             var bucket = given.one()
@@ -511,7 +636,7 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(bucket, CRPhase.PENDING);
+            var reconciled = awaitPhase(kubernetesClient, bucket, CRPhase.PENDING);
 
             assertThat(reconciled.getStatus().getMessage()).contains("does not exist or is not ready yet");
             assertThat(garageAdminApi().listBuckets()).isEmpty();
@@ -521,7 +646,7 @@ class BucketReconcilerTest {
         @DisplayName("A Bucket referencing a failed S3Connection should stay pending")
         void failedConnection_staysPending() {
             // given
-            givenAppliedLayout();
+            given.appliedLayout();
 
             var adminSecretRef = given.one()
                     .secretKeyRef()
@@ -547,8 +672,8 @@ class BucketReconcilerTest {
 
             var connectionRef = new ResourceRef();
 
-            connectionRef.setName(s3Connection.getMetadata().getName());
             connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
+            connectionRef.setName(s3Connection.getMetadata().getName());
 
             // when
             var bucket = given.one()
@@ -558,8 +683,46 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            awaitPhase(bucket, CRPhase.PENDING);
+            awaitPhase(kubernetesClient, bucket, CRPhase.PENDING);
 
+            assertThat(garageAdminApi().listBuckets()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("A Bucket referencing an S3Connection that is READY for an older generation should stay pending")
+        void staleConnection_staysPending() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var s3Connection = kubernetesClient.resources(S3Connection.class)
+                    .inNamespace(connectionRef.getNamespace())
+                    .withName(connectionRef.getName());
+
+            // What a Bucket sees between an edit of the connection and the probe of the new spec.
+            // A status change does not bump the generation, so the operator leaves this patch alone.
+            s3Connection.editStatus(item -> {
+                item.getStatus().setObservedGeneration(item.getMetadata().getGeneration() - 1);
+
+                return item;
+            });
+
+            var stale = Objects.requireNonNull(s3Connection.get());
+
+            // precondition: a connection that is not READY keeps the Bucket pending too, which would prove nothing
+            assertThat(stale.getStatus().getPhase()).isEqualTo(CRPhase.READY);
+            assertThat(stale.getStatus().getObservedGeneration()).isLessThan(stale.getMetadata().getGeneration());
+
+            // when
+            var bucket = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-stale-gated-bucket")
+                    .returnFirst();
+
+            // then
+            var reconciled = awaitPhase(kubernetesClient, bucket, CRPhase.PENDING);
+
+            assertThat(reconciled.getStatus().getMessage()).contains("does not exist or is not ready yet");
             assertThat(garageAdminApi().listBuckets()).isEmpty();
         }
     }
@@ -570,7 +733,7 @@ class BucketReconcilerTest {
         @DisplayName("A second Bucket for a bucket that is already managed should be refused, and deleting it should leave the bucket alone")
         void secondBucketForManagedBucket_isRefused() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var first = given.one()
                     .bucket()
@@ -578,7 +741,7 @@ class BucketReconcilerTest {
                     .withBucketName("test-shared-bucket")
                     .returnFirst();
 
-            awaitPhase(first, CRPhase.READY);
+            awaitPhase(kubernetesClient, first, CRPhase.READY);
 
             // when
             var second = given.one()
@@ -589,7 +752,7 @@ class BucketReconcilerTest {
                     .returnFirst();
 
             // then
-            var refused = awaitPhase(second, CRPhase.ERROR);
+            var refused = awaitPhase(kubernetesClient, second, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("already managed by Bucket");
             assertThat(refused.getStatus().getBucketId()).isNull();
@@ -616,7 +779,7 @@ class BucketReconcilerTest {
         @DisplayName("Changing the connectionRef should be rejected by the API server")
         void changedConnectionRef_isRejected() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             var bucket = given.one()
                     .bucket()
@@ -624,12 +787,12 @@ class BucketReconcilerTest {
                     .withBucketName("test-pinned-bucket")
                     .returnFirst();
 
-            awaitPhase(bucket, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
             var otherConnectionRef = new ResourceRef();
 
-            otherConnectionRef.setName("another-connection");
             otherConnectionRef.setNamespace(connectionRef.getNamespace());
+            otherConnectionRef.setName("another-connection");
 
             // when
             var thrown = catchThrowable(
@@ -646,6 +809,36 @@ class BucketReconcilerTest {
                     .isInstanceOf(RuntimeException.class)
                     .hasMessageContaining("connectionRef is immutable");
         }
+
+        @Test
+        @DisplayName("Changing the name should be rejected by the API server")
+        void changedName_isRejected() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var bucket = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-named-bucket")
+                    .returnFirst();
+
+            awaitPhase(kubernetesClient, bucket, CRPhase.READY);
+
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .bucket()
+                            .withName(bucket.getMetadata().getName())
+                            .withConnectionRef(connectionRef)
+                            .withBucketName("test-renamed-bucket")
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("The Bucket name is immutable");
+        }
     }
 
     @Nested
@@ -654,9 +847,17 @@ class BucketReconcilerTest {
         @DisplayName("An invalid bucket name should be rejected by the API server")
         void invalidName_isRejected() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
-            assertThat(List.of("UPPERCASE", "ab", "-leading-hyphen", "trailing-hyphen-"))
+            assertThat(List.of(
+                    "UPPERCASE",
+                    "ab",
+                    "-leading-hyphen",
+                    "trailing-hyphen-",
+                    "10.0.0.1",
+                    "xn--abc",
+                    "logs-s3alias"
+            ))
                     .allSatisfy(invalidName -> {
                         // when
                         var thrown = catchThrowable(
@@ -682,7 +883,7 @@ class BucketReconcilerTest {
         @DisplayName("A maxSize that is not a whole number of bytes greater than zero should be rejected by the API server")
         void invalidMaxSize_isRejected() {
             // given
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
 
             assertThat(List.of("", "0", "-1Gi", "0.5", "1m", "10 Gi", "ten"))
                     .allSatisfy(invalidMaxSize -> {

@@ -73,59 +73,7 @@ class BucketServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("quotas maxSize");
-        }
-    }
-
-    @Nested
-    class QuotasMatch {
-        @Test
-        @DisplayName("Identical quotas should match")
-        void identicalQuotas_match() {
-            // when
-            var matches = bucketService.quotasMatch(
-                    new BucketQuotas(10737418240L, 1000L),
-                    new BucketQuotas(10737418240L, 1000L)
-            );
-
-            // then
-            assertThat(matches).isTrue();
-        }
-
-        @Test
-        @DisplayName("Two unlimited buckets should match")
-        void noQuotas_match() {
-            // when
-            var matches = bucketService.quotasMatch(BucketQuotas.NONE, BucketQuotas.NONE);
-
-            // then
-            assertThat(matches).isTrue();
-        }
-
-        @Test
-        @DisplayName("A quota that is set on only one side should not match")
-        void oneSidedQuota_doesNotMatch() {
-            // when
-            var matches = bucketService.quotasMatch(
-                    new BucketQuotas(10737418240L, null),
-                    BucketQuotas.NONE
-            );
-
-            // then
-            assertThat(matches).isFalse();
-        }
-
-        @Test
-        @DisplayName("A different object count should not match")
-        void differentMaxObjects_doNotMatch() {
-            // when
-            var matches = bucketService.quotasMatch(
-                    new BucketQuotas(null, 1000L),
-                    new BucketQuotas(null, 2000L)
-            );
-
-            // then
-            assertThat(matches).isFalse();
+                    .hasMessageContaining("spec.quotas.maxSize");
         }
     }
 }

@@ -28,7 +28,7 @@ spec:
 |---------------------|---------------------------------------------|--------------------------------------------------------------------|----------|---------|
 | `connectionRef`     | [`ResourceRef`](#resourceref-connectionref) | Reference to the `S3Connection` the key lives on.                  | Yes      | No      |
 | `name`              | `string`                                    | The name the key is created under on the backend.                  | Yes      | No      |
-| `secretName`        | `string`                                    | Name of the Secret to write. Defaults to `metadata.name`.          | No       | Yes     |
+| `secretName`        | `string`                                    | Name of the Secret to write. Defaults to `metadata.name`.          | No       | No      |
 | `allowCreateBucket` | `boolean`                                   | Whether the key may create buckets by itself. Defaults to `false`. | No       | Yes     |
 
 ### ResourceRef (`connectionRef`)
@@ -42,6 +42,10 @@ A change to a `Mutable` field is applied at the next reconcile.
 
 `name` is immutable because it is how the operator finds the key the first time: a change would leave the original key in place, with its grants, and create a second one. `connectionRef` is immutable for the same reason — pointing the resource at another backend would create a second key there and leave the first one behind as a live credential.
 
+`secretName` is immutable as well, from the first apply on: setting, changing or removing it later is refused. The operator has no right to delete Secrets, so a renamed Secret would leave the old one behind, with live credentials, until the `AccessKey` is deleted. Delete and recreate the `AccessKey` to use a different Secret name.
+
+The admin token of the `S3Connection` needs access to the Admin API endpoints `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey` and `DeleteKey`, see [`S3Connection`](s3-connection.md#spec).
+
 `allowCreateBucket` is off by default on purpose. Buckets are meant to be declared as
 [`Bucket`](bucket.md) resources; a key that can create its own can grow storage outside of what is written down.
 
@@ -49,16 +53,18 @@ A change to a `Mutable` field is applied at the next reconcile.
 
 The operator writes an `Opaque` Secret with two entries:
 
-| Key               | Value                                              |
-|-------------------|----------------------------------------------------|
-| `accessKeyId`     | The `AWS_ACCESS_KEY_ID` clients authenticate with. |
-| `secretAccessKey` | The secret half of the credentials.                |
+| Key                     | Value                               |
+|-------------------------|-------------------------------------|
+| `AWS_ACCESS_KEY_ID`     | The key identifier.                 |
+| `AWS_SECRET_ACCESS_KEY` | The secret half of the credentials. |
+
+The AWS SDKs and most S3 clients read these names as environment variables, so a Pod can load the Secret with `envFrom` and no mapping.
 
 The Secret is always created **in the `AccessKey`'s own namespace**, and carries an owner reference to the `AccessKey`, so Kubernetes garbage-collects it when the resource goes away. Kubernetes ignores cross-namespace owner references, which is why `secretName` names a Secret rather than referencing an arbitrary namespace — a Secret elsewhere would outlive its owner while still holding live credentials.
 
-If a Secret of that name already exists and is not owned by the `AccessKey`, the operator leaves it untouched and reports `ERROR`. Taking it over would hand it to the `AccessKey`'s lifecycle, and Kubernetes would garbage-collect it — with whatever else it holds — when the `AccessKey` is deleted.
+If a Secret of that name already exists and is not owned by the `AccessKey`, the operator leaves it untouched and reports `ERROR`. Taking it over would hand it to the `AccessKey`'s lifecycle, and Kubernetes would garbage-collect it — with whatever else it holds — when the `AccessKey` is deleted. The check runs before a new key is created, so a refused `AccessKey` leaves no key on the backend that nobody can read.
 
-Note the Secret does **not** carry the S3 endpoint; that lives on the `S3Connection`, and the connection currently records only the admin endpoint.
+Note the Secret does **not** carry the S3 endpoint; that lives on the `S3Connection`, and the connection currently records only the admin endpoint. A key added to the Secret by hand, such as the endpoint, is kept: the operator only compares and writes its own two keys.
 
 ### If the Secret is deleted
 
@@ -75,13 +81,17 @@ It is written again on the next reconciliation, with the **same** credentials �
 
 The secret half of the credentials is deliberately **not** in the status: a status is readable by anyone who can read the resource, while the Secret is protected by RBAC.
 
-An `AccessKey` stays `PENDING` while its `S3Connection` does not exist or is not `READY`, and nothing is created on the backend in that state.
+An `AccessKey` stays `PENDING` while its `S3Connection` does not exist or is not `READY`, and is retried every 60 seconds. Nothing is created on the backend in that state.
+
+`ERROR` means that the last reconciliation failed, and `message` has the reason: for example the backend cannot be reached, more than one key has the name, another `AccessKey` already manages the key, or a Secret of that name exists that the `AccessKey` does not own. The operator tries again every 60 seconds.
 
 ## Adoption
 
 A key that already exists on the backend under the same name is adopted rather than duplicated, and its credentials are written into the Secret. This makes it safe to declare an `AccessKey` for a key that predates the operator, including one created by the Helm chart's `bootstrap` option.
 
-The name is only used to find the key the first time. Once it is recorded in `status.accessKeyId`, the operator addresses the key by that identifier alone: renaming it on the backend does not detach it, and deleting the resource deletes exactly that key.
+The key that the Helm chart creates with `bootstrap.enabled` is named `default access key`, so use this as `spec.name`. Do not delete that `AccessKey` while `bootstrap.enabled` is `true`: the operator deletes the key, and Garage then does not start. It stops with `was deleted in the cluster, cannot add it back`. Adoption also sets `allowCreateBucket` to the spec, so set it to `true` to keep the right of the chart key to create buckets.
+
+The name is only used to find the key the first time. Once it is recorded in `status.accessKeyId`, the operator addresses the key by that identifier alone: renaming it on the backend does not detach it, and deleting the resource deletes exactly that key. If the recorded key is deleted on the backend, the operator looks for the name again. It adopts a key of that name or creates a new one, and writes the new credentials into the Secret.
 
 Garage does not enforce unique key names, so adoption is refused with `ERROR` when
 
@@ -99,7 +109,7 @@ The Secret goes with it, through its owner reference.
 If the resource never got as far as creating a key — it stayed `PENDING` because its `S3Connection`
 was missing — deletion completes immediately rather than waiting for a connection that may never appear.
 
-Otherwise a missing `S3Connection` keeps the resource around until the connection is back, so the key is not silently left behind. The one exception is deleting the **whole namespace**: when Garage is installed in the same namespace, the connection, its admin Secret and Garage itself all go away at once, and waiting for them would keep the namespace in `Terminating` forever. Once the namespace is being deleted and the connection is gone, the resource is released without deleting the key. A backend that lives in another namespace then keeps the key, and it has to be removed there by hand.
+Otherwise a missing or not `READY` `S3Connection` keeps the resource around until the connection is back, so the key is not silently left behind. The one exception is deleting the **whole namespace**: when Garage is installed in the same namespace, the connection, its admin Secret and Garage itself all go away at once, and waiting for them would keep the namespace in `Terminating` forever. Once the namespace is being deleted and the connection is missing or not `READY`, the resource is released without deleting the key. A backend that lives in another namespace then keeps the key, and it has to be removed there by hand.
 
 ## Rotation
 

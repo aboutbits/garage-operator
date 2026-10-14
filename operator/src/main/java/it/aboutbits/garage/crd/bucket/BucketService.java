@@ -6,8 +6,6 @@ import jakarta.inject.Singleton;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
-import java.util.Objects;
-
 @Singleton
 @NullMarked
 public class BucketService {
@@ -23,16 +21,8 @@ public class BucketService {
         return new BucketQuotas(
                 maxSize == null
                         ? null
-                        : Quantities.toBytes(maxSize, "quotas maxSize"),
+                        : Quantities.toBytes(maxSize, "spec.quotas.maxSize"),
                 quotasSpec.getMaxObjects()
         );
-    }
-
-    public boolean quotasMatch(
-            BucketQuotas currentQuotas,
-            BucketQuotas desiredQuotas
-    ) {
-        return Objects.equals(currentQuotas.maxSizeBytes(), desiredQuotas.maxSizeBytes())
-                && Objects.equals(currentQuotas.maxObjects(), desiredQuotas.maxObjects());
     }
 }

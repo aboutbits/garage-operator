@@ -7,7 +7,6 @@ import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.accesskey.AccessKeySpec;
-import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -24,9 +23,6 @@ public class AccessKeyCreate extends TestDataCreator<AccessKey> {
     private final KubernetesClient kubernetesClient;
 
     private @Nullable String withNamespace;
-
-    @Setter(AccessLevel.NONE)
-    private boolean withoutNamespace = false;
 
     private @Nullable String withName;
 
@@ -48,11 +44,6 @@ public class AccessKeyCreate extends TestDataCreator<AccessKey> {
         this.kubernetesClient = kubernetesClient;
     }
 
-    public AccessKeyCreate withoutNamespace() {
-        this.withoutNamespace = true;
-        return this;
-    }
-
     @Override
     protected AccessKey create(int index) {
         var namespace = getNamespace();
@@ -61,8 +52,8 @@ public class AccessKeyCreate extends TestDataCreator<AccessKey> {
         var item = new AccessKey();
 
         item.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
                 .withNamespace(namespace)
+                .withName(name)
                 .build()
         );
 
@@ -91,11 +82,7 @@ public class AccessKeyCreate extends TestDataCreator<AccessKey> {
                 );
     }
 
-    private @Nullable String getNamespace() {
-        if (withoutNamespace) {
-            return null;
-        }
-
+    private String getNamespace() {
         if (withNamespace != null) {
             return withNamespace;
         }
@@ -136,8 +123,8 @@ public class AccessKeyCreate extends TestDataCreator<AccessKey> {
 
         var connectionRef = new ResourceRef();
 
-        connectionRef.setName(s3Connection.getMetadata().getName());
         connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
+        connectionRef.setName(s3Connection.getMetadata().getName());
 
         withConnectionRef = connectionRef;
 
