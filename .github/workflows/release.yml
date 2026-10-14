@@ -37,7 +37,9 @@ jobs:
           java-version: 25
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - name: Increment version
-        run: ./gradlew --console=colored createRelease -Prelease.versionIncrementer=increment${{ github.event.inputs.increment }}
+        # verifyRelease of the axion-release plugin resolves the configurations of the operator project from the
+        # root project, which a parallel build refuses with "attempted without an exclusive lock".
+        run: ./gradlew --console=colored --no-parallel createRelease -Prelease.versionIncrementer=increment${{ github.event.inputs.increment }}
         shell: bash
       - name: Get next package version
         id: nextVersion
