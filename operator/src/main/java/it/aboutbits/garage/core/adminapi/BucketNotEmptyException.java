@@ -11,7 +11,7 @@ public class BucketNotEmptyException extends RuntimeException {
     private final String bucketId;
 
     public BucketNotEmptyException(String bucketId) {
-        super("The bucket still holds objects and was not deleted [bucket.id=%s]".formatted(bucketId));
+        super("The bucket still holds objects and was not deleted [bucketId=%s]".formatted(bucketId));
         this.bucketId = bucketId;
     }
 }

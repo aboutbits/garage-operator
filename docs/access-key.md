@@ -12,8 +12,8 @@ On its own an access key can do nothing: it has no access to any bucket until a
 apiVersion: garage.aboutbits.it/v1
 kind: AccessKey
 metadata:
-  name: acme-app
   namespace: acme
+  name: acme-app
 spec:
   connectionRef:
     name: acme
@@ -24,13 +24,21 @@ spec:
 
 ## Spec
 
-| Field                     | Required | Description                                                        |
-|---------------------------|----------|--------------------------------------------------------------------|
-| `connectionRef.name`      | yes      | The `S3Connection` the key lives on. **Immutable.**                |
-| `connectionRef.namespace` | no       | Defaults to the namespace of the `AccessKey`.                      |
-| `name`                    | yes      | The name the key is created under on the backend. **Immutable.**   |
-| `secretName`              | no       | Name of the Secret to write. Defaults to `metadata.name`.          |
-| `allowCreateBucket`       | no       | Whether the key may create buckets by itself. Defaults to `false`. |
+| Field               | Type                                        | Description                                                        | Required | Mutable |
+|---------------------|---------------------------------------------|--------------------------------------------------------------------|----------|---------|
+| `connectionRef`     | [`ResourceRef`](#resourceref-connectionref) | Reference to the `S3Connection` the key lives on.                  | Yes      | No      |
+| `name`              | `string`                                    | The name the key is created under on the backend.                  | Yes      | No      |
+| `secretName`        | `string`                                    | Name of the Secret to write. Defaults to `metadata.name`.          | No       | Yes     |
+| `allowCreateBucket` | `boolean`                                   | Whether the key may create buckets by itself. Defaults to `false`. | No       | Yes     |
+
+### ResourceRef (`connectionRef`)
+
+| Field       | Type     | Description                                                                               | Required |
+|-------------|----------|-------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the `S3Connection`. If not specified, uses the namespace of the `AccessKey`. | No       |
+| `name`      | `string` | Name of the `S3Connection`.                                                               | Yes      |
+
+A change to a `Mutable` field is applied at the next reconcile.
 
 `name` is immutable because it is how the operator finds the key the first time: a change would leave the original key in place, with its grants, and create a second one. `connectionRef` is immutable for the same reason — pointing the resource at another backend would create a second key there and leave the first one behind as a live credential.
 

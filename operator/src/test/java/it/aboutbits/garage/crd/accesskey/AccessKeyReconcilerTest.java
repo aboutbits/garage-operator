@@ -15,16 +15,20 @@ import it.aboutbits.garage.core.adminapi.GarageAdminClientFactory;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
-import jakarta.inject.Inject;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -34,41 +38,49 @@ import java.util.concurrent.TimeUnit;
 import static it.aboutbits.garage.crd.accesskey.AccessKeyReconciler.SECRET_DATA_ACCESS_KEY_ID;
 import static it.aboutbits.garage.crd.accesskey.AccessKeyReconciler.SECRET_DATA_SECRET_ACCESS_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.awaitility.Awaitility.await;
 
 /// Exercises access key management against the real Garage node provided by the Compose Dev
 /// Service.
 @Slf4j
 @QuarkusTest
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@RequiredArgsConstructor
 @NullMarked
 class AccessKeyReconcilerTest {
     private static final long AWAIT_SECONDS = 60;
 
-    @Inject
-    @SuppressWarnings("NullAway.Init")
-    KubernetesClient kubernetesClient;
+    private final KubernetesClient kubernetesClient;
 
-    @Inject
-    @SuppressWarnings("NullAway.Init")
-    Given given;
+    private final Given given;
 
-    @Inject
-    @SuppressWarnings("NullAway.Init")
-    GarageAdminClientFactory garageAdminClientFactory;
+    private final GarageAdminClientFactory garageAdminClientFactory;
 
     @ConfigProperty(name = "garage.admin.port")
-    @SuppressWarnings("NullAway.Init")
-    Integer garageAdminPort;
+    private final int garageAdminPort;
 
     @ConfigProperty(name = "garage.admin.token")
-    @SuppressWarnings("NullAway.Init")
-    String garageAdminToken;
+    private final String garageAdminToken;
+
+    private @Nullable GarageAdminApi garageAdminApi;
 
     private GarageAdminApi garageAdminApi() {
-        return garageAdminClientFactory.create(
-                URI.create("http://localhost:%d".formatted(garageAdminPort)),
-                garageAdminToken
-        );
+        if (garageAdminApi == null) {
+            garageAdminApi = garageAdminClientFactory.create(
+                    URI.create("http://localhost:%d".formatted(garageAdminPort)),
+                    garageAdminToken
+            );
+        }
+
+        return garageAdminApi;
+    }
+
+    @AfterAll
+    void closeGarageAdminApi() throws IOException {
+        if (garageAdminApi instanceof Closeable closeable) {
+            closeable.close();
+        }
     }
 
     @BeforeEach
@@ -82,9 +94,7 @@ class AccessKeyReconcilerTest {
 
         // Keys can outlive a failed test, and bucket/key calls need a serving cluster.
         try {
-            var garageAdminApi = garageAdminApi();
-
-            garageAdminApi.listKeys().forEach(key -> garageAdminApi.deleteKey(key.id()));
+            garageAdminApi().listKeys().forEach(key -> garageAdminApi().deleteKey(key.id()));
         } catch (RuntimeException e) {
             log.debug("Skipping access key cleanup, the Garage cluster is not serving yet", e);
         }
@@ -183,14 +193,17 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("An AccessKey should be created and its credentials written to a Secret")
         void accessKey_isCreatedWithSecret() {
+            // given
             var connectionRef = givenReadyConnection();
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-created-key")
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(accessKey, CRPhase.READY);
 
             var status = reconciled.getStatus();
@@ -211,14 +224,17 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("The secret half of the credentials should never appear in the status")
         void secret_isNotInStatus() {
+            // given
             var connectionRef = givenReadyConnection();
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-discreet-key")
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(accessKey, CRPhase.READY);
 
             var secret = requireSecret(accessKey.getMetadata().getName());
@@ -231,8 +247,10 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("A custom secretName should be honoured")
         void customSecretName_isHonoured() {
+            // given
             var connectionRef = givenReadyConnection();
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
@@ -240,6 +258,7 @@ class AccessKeyReconcilerTest {
                     .withSecretName("my-own-credentials")
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(accessKey, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getSecretName()).isEqualTo("my-own-credentials");
@@ -249,14 +268,17 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("The Secret should be owned by the AccessKey so it is collected with it")
         void secret_isOwnedByAccessKey() {
+            // given
             var connectionRef = givenReadyConnection();
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-owned-secret-key")
                     .returnFirst();
 
+            // then
             awaitPhase(accessKey, CRPhase.READY);
 
             var secret = requireSecret(accessKey.getMetadata().getName());
@@ -275,6 +297,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("A deleted Secret should be written again from the backend")
         void deletedSecret_isRebuilt() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var accessKey = given.one()
@@ -289,11 +312,13 @@ class AccessKeyReconcilerTest {
             var original = requireSecret(secretName);
             var originalSecretAccessKey = decode(original, SECRET_DATA_SECRET_ACCESS_KEY);
 
+            // when
             kubernetesClient.secrets()
                     .inNamespace(kubernetesClient.getNamespace())
                     .withName(secretName)
                     .delete();
 
+            // then
             // Nothing else changes: the watch on the Secret alone has to trigger the rebuild, well
             // before the periodic reconciliation would, and with the very same credentials rather
             // than rotated ones. A new UID proves it really is a new Secret.
@@ -310,6 +335,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("A Secret edited by hand should be put back")
         void editedSecret_isRestored() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var accessKey = given.one()
@@ -323,6 +349,7 @@ class AccessKeyReconcilerTest {
             var secretName = accessKey.getMetadata().getName();
             var originalSecretAccessKey = decode(requireSecret(secretName), SECRET_DATA_SECRET_ACCESS_KEY);
 
+            // when
             // Applied under a field manager of its own, the way `kubectl` would, so the edited
             // field changes hands and a plain server-side apply would conflict on it.
             kubernetesClient.secrets()
@@ -338,6 +365,7 @@ class AccessKeyReconcilerTest {
                     .forceConflicts()
                     .serverSideApply();
 
+            // then
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .untilAsserted(() -> {
@@ -349,6 +377,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("An existing key should be adopted rather than duplicated")
         void existingKey_isAdopted() {
+            // given
             var connectionRef = givenReadyConnection();
 
             // Someone created it out of band, before the CR existed.
@@ -356,12 +385,14 @@ class AccessKeyReconcilerTest {
                     UpdateKeyRequestBody.named("test-adopted-key")
             );
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-adopted-key")
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(accessKey, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getAccessKeyId()).isEqualTo(created.accessKeyId());
@@ -374,8 +405,10 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("allowCreateBucket should be applied on the backend")
         void allowCreateBucket_isApplied() {
+            // given
             var connectionRef = givenReadyConnection();
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
@@ -383,6 +416,7 @@ class AccessKeyReconcilerTest {
                     .withAllowCreateBucket(true)
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(accessKey, CRPhase.READY);
 
             var keyInfo = garageAdminApi().getKeyInfo(
@@ -396,6 +430,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("Revoking allowCreateBucket should be applied on the backend")
         void revokedCreateBucket_isApplied() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var accessKey = given.one()
@@ -407,6 +442,7 @@ class AccessKeyReconcilerTest {
 
             awaitPhase(accessKey, CRPhase.READY);
 
+            // when
             var revoked = given.one()
                     .accessKey()
                     .withName(accessKey.getMetadata().getName())
@@ -415,6 +451,7 @@ class AccessKeyReconcilerTest {
                     .withAllowCreateBucket(false)
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(revoked, CRPhase.READY);
 
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
@@ -433,6 +470,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("Deleting an AccessKey should delete the key and its Secret")
         void deletedAccessKey_removesKeyAndSecret() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var accessKey = given.one()
@@ -445,10 +483,13 @@ class AccessKeyReconcilerTest {
 
             var secretName = accessKey.getMetadata().getName();
 
+            // precondition: otherwise the Secret being gone afterwards would prove nothing
             assertThat(secret(secretName)).isNotNull();
 
+            // when
             TestUtil.deleteResource(kubernetesClient, AccessKey.class);
 
+            // then
             assertThat(garageAdminApi().listKeys())
                     .noneSatisfy(key -> assertThat(key.name()).isEqualTo("test-deleted-key"));
 
@@ -464,6 +505,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("A second AccessKey for a key that is already managed should be refused, and deleting it should leave the key alone")
         void secondAccessKeyForManagedKey_isRefused() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var first = given.one()
@@ -476,20 +518,24 @@ class AccessKeyReconcilerTest {
                     awaitPhase(first, CRPhase.READY).getStatus().getAccessKeyId()
             );
 
+            // when
             var second = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-shared-key")
                     .returnFirst();
 
+            // then
             var refused = awaitPhase(second, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("already managed by AccessKey");
             assertThat(refused.getStatus().getAccessKeyId()).isNull();
             assertThat(secret(second.getMetadata().getName())).isNull();
 
+            // when
             deleteAndAwaitGone(second);
 
+            // then
             assertThat(garageAdminApi().listKeys())
                     .singleElement()
                     .satisfies(key -> assertThat(key.id()).isEqualTo(firstAccessKeyId));
@@ -498,17 +544,20 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("A name that more than one key carries should be refused rather than guessed")
         void ambiguousName_isRefused() {
+            // given
             var connectionRef = givenReadyConnection();
 
             garageAdminApi().createKey(UpdateKeyRequestBody.named("test-twin-key"));
             garageAdminApi().createKey(UpdateKeyRequestBody.named("test-twin-key"));
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-twin-key")
                     .returnFirst();
 
+            // then
             var refused = awaitPhase(accessKey, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("More than one access key is named test-twin-key");
@@ -519,6 +568,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("Deleting an AccessKey should delete its key even if the key was renamed on the backend")
         void renamedKey_isStillDeleted() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var accessKey = given.one()
@@ -533,8 +583,10 @@ class AccessKeyReconcilerTest {
 
             garageAdminApi().updateKey(accessKeyId, UpdateKeyRequestBody.named("renamed-out-of-band"));
 
+            // when
             TestUtil.deleteResource(kubernetesClient, AccessKey.class);
 
+            // then
             assertThat(garageAdminApi().listKeys())
                     .noneSatisfy(key -> assertThat(key.id()).isEqualTo(accessKeyId));
         }
@@ -542,6 +594,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("An existing Secret the AccessKey does not own should be left untouched")
         void unownedSecret_isLeftUntouched() {
+            // given
             var connectionRef = givenReadyConnection();
 
             kubernetesClient.secrets()
@@ -556,6 +609,7 @@ class AccessKeyReconcilerTest {
                     )
                     .serverSideApply();
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
@@ -563,6 +617,7 @@ class AccessKeyReconcilerTest {
                     .withSecretName("test-foreign-secret")
                     .returnFirst();
 
+            // then
             var refused = awaitPhase(accessKey, CRPhase.ERROR);
 
             assertThat(refused.getStatus().getMessage()).contains("not owned by this resource");
@@ -576,8 +631,10 @@ class AccessKeyReconcilerTest {
             // AccessKey still cleans it up rather than leaving a live credential behind.
             assertThat(refused.getStatus().getAccessKeyId()).isNotNull();
 
+            // when
             TestUtil.deleteResource(kubernetesClient, AccessKey.class);
 
+            // then
             assertThat(garageAdminApi().listKeys()).isEmpty();
             assertThat(secret("test-foreign-secret")).isNotNull();
 
@@ -593,6 +650,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("Changing the connectionRef should be rejected by the API server")
         void changedConnectionRef_isRejected() {
+            // given
             var connectionRef = givenReadyConnection();
 
             var accessKey = given.one()
@@ -608,18 +666,20 @@ class AccessKeyReconcilerTest {
             otherConnectionRef.setName("another-connection");
             otherConnectionRef.setNamespace(connectionRef.getNamespace());
 
-            try {
-                given.one()
-                        .accessKey()
-                        .withName(accessKey.getMetadata().getName())
-                        .withConnectionRef(otherConnectionRef)
-                        .withKeyName("test-pinned-key")
-                        .returnFirst();
+            // when
+            var thrown = catchThrowable(
+                    () -> given.one()
+                            .accessKey()
+                            .withName(accessKey.getMetadata().getName())
+                            .withConnectionRef(otherConnectionRef)
+                            .withKeyName("test-pinned-key")
+                            .returnFirst()
+            );
 
-                throw new AssertionError("Expected the connectionRef change to be rejected");
-            } catch (RuntimeException e) {
-                assertThat(e).hasMessageContaining("connectionRef is immutable");
-            }
+            // then
+            assertThat(thrown)
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessageContaining("connectionRef is immutable");
         }
     }
 
@@ -628,6 +688,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("Deleting a namespace whose S3Connection is already gone should not be blocked by its AccessKeys")
         void namespaceDeletion_isNotBlocked() {
+            // given
             givenAppliedLayout();
 
             var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
@@ -672,6 +733,7 @@ class AccessKeyReconcilerTest {
 
             awaitPhase(accessKey, CRPhase.READY);
 
+            // when
             // What namespace deletion does to a Garage installed in that namespace: the
             // connection goes away, independently of anything that depends on it.
             kubernetesClient.resources(S3Connection.class)
@@ -683,6 +745,7 @@ class AccessKeyReconcilerTest {
                     .withName(namespace)
                     .delete();
 
+            // then
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .until(() -> kubernetesClient.namespaces().withName(namespace).get() == null);
@@ -706,6 +769,7 @@ class AccessKeyReconcilerTest {
         @Test
         @DisplayName("An AccessKey referencing an unknown S3Connection should stay pending")
         void unknownConnection_staysPending() {
+            // given
             givenAppliedLayout();
 
             var connectionRef = new ResourceRef();
@@ -713,12 +777,14 @@ class AccessKeyReconcilerTest {
             connectionRef.setName("does-not-exist");
             connectionRef.setNamespace(kubernetesClient.getNamespace());
 
+            // when
             var accessKey = given.one()
                     .accessKey()
                     .withConnectionRef(connectionRef)
                     .withKeyName("test-ungated-key")
                     .returnFirst();
 
+            // then
             var reconciled = awaitPhase(accessKey, CRPhase.PENDING);
 
             assertThat(reconciled.getStatus().getMessage()).contains("does not exist or is not ready yet");

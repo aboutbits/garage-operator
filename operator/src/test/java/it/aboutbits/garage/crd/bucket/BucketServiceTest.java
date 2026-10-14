@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 @NullMarked
 class BucketServiceTest {
@@ -31,8 +31,10 @@ class BucketServiceTest {
         @Test
         @DisplayName("An absent quotas section should mean no limits")
         void absentQuotas_meansNoLimits() {
+            // when
             var quotas = bucketService.desiredQuotas(null);
 
+            // then
             assertThat(quotas).isEqualTo(BucketQuotas.NONE);
             assertThat(quotas.isEmpty()).isTrue();
         }
@@ -40,8 +42,10 @@ class BucketServiceTest {
         @Test
         @DisplayName("A size quota should be converted to bytes")
         void maxSize_isConvertedToBytes() {
+            // when
             var quotas = bucketService.desiredQuotas(quotasSpec("10Gi", null));
 
+            // then
             assertThat(quotas.maxSizeBytes()).isEqualTo(10737418240L);
             assertThat(quotas.maxObjects()).isNull();
         }
@@ -49,8 +53,10 @@ class BucketServiceTest {
         @Test
         @DisplayName("An object count quota should be carried over as-is")
         void maxObjects_isCarriedOver() {
+            // when
             var quotas = bucketService.desiredQuotas(quotasSpec(null, 1000L));
 
+            // then
             assertThat(quotas.maxSizeBytes()).isNull();
             assertThat(quotas.maxObjects()).isEqualTo(1000L);
         }
@@ -58,9 +64,14 @@ class BucketServiceTest {
         @Test
         @DisplayName("An unusable size quota should be rejected, naming the field")
         void invalidMaxSize_isRejected() {
+            // given
             var quotasSpec = quotasSpec("ten gigabytes", null);
 
-            assertThatThrownBy(() -> bucketService.desiredQuotas(quotasSpec))
+            // when
+            var thrown = catchThrowable(() -> bucketService.desiredQuotas(quotasSpec));
+
+            // then
+            assertThat(thrown)
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("quotas maxSize");
         }
@@ -71,34 +82,50 @@ class BucketServiceTest {
         @Test
         @DisplayName("Identical quotas should match")
         void identicalQuotas_match() {
-            assertThat(bucketService.quotasMatch(
+            // when
+            var matches = bucketService.quotasMatch(
                     new BucketQuotas(10737418240L, 1000L),
                     new BucketQuotas(10737418240L, 1000L)
-            )).isTrue();
+            );
+
+            // then
+            assertThat(matches).isTrue();
         }
 
         @Test
         @DisplayName("Two unlimited buckets should match")
         void noQuotas_match() {
-            assertThat(bucketService.quotasMatch(BucketQuotas.NONE, BucketQuotas.NONE)).isTrue();
+            // when
+            var matches = bucketService.quotasMatch(BucketQuotas.NONE, BucketQuotas.NONE);
+
+            // then
+            assertThat(matches).isTrue();
         }
 
         @Test
         @DisplayName("A quota that is set on only one side should not match")
         void oneSidedQuota_doesNotMatch() {
-            assertThat(bucketService.quotasMatch(
+            // when
+            var matches = bucketService.quotasMatch(
                     new BucketQuotas(10737418240L, null),
                     BucketQuotas.NONE
-            )).isFalse();
+            );
+
+            // then
+            assertThat(matches).isFalse();
         }
 
         @Test
         @DisplayName("A different object count should not match")
         void differentMaxObjects_doNotMatch() {
-            assertThat(bucketService.quotasMatch(
+            // when
+            var matches = bucketService.quotasMatch(
                     new BucketQuotas(null, 1000L),
                     new BucketQuotas(null, 2000L)
-            )).isFalse();
+            );
+
+            // then
+            assertThat(matches).isFalse();
         }
     }
 }

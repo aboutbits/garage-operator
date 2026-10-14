@@ -8,8 +8,8 @@ A `Bucket` manages one bucket on the backend named by its [`S3Connection`](s3-co
 apiVersion: garage.aboutbits.it/v1
 kind: Bucket
 metadata:
-  name: acme-uploads
   namespace: acme
+  name: acme-uploads
 spec:
   connectionRef:
     name: acme
@@ -22,14 +22,28 @@ spec:
 
 ## Spec
 
-| Field                     | Required | Description                                                         |
-|---------------------------|----------|---------------------------------------------------------------------|
-| `connectionRef.name`      | yes      | The `S3Connection` the bucket lives on. **Immutable.**              |
-| `connectionRef.namespace` | no       | Defaults to the namespace of the `Bucket`.                          |
-| `name`                    | yes      | The name the bucket is addressed by over S3. **Immutable.**         |
-| `reclaimPolicy`           | no       | `Retain` (default) or `Delete`.                                     |
-| `quotas.maxSize`          | no       | Maximum total object size, as a Kubernetes quantity such as `10Gi`. |
-| `quotas.maxObjects`       | no       | Maximum number of objects.                                          |
+| Field           | Type                                           | Description                                          | Required | Mutable |
+|-----------------|------------------------------------------------|------------------------------------------------------|----------|---------|
+| `connectionRef` | [`ResourceRef`](#resourceref-connectionref)    | Reference to the `S3Connection` the bucket lives on. | Yes      | No      |
+| `name`          | `string`                                       | The name the bucket is addressed by over S3.         | Yes      | No      |
+| `reclaimPolicy` | `string`                                       | `Retain` (default) or `Delete`.                      | No       | Yes     |
+| `quotas`        | [`BucketQuotasSpec`](#bucketquotasspec-quotas) | Limits of the bucket. Omit for an unlimited bucket.  | No       | Yes     |
+
+### ResourceRef (`connectionRef`)
+
+| Field       | Type     | Description                                                                            | Required |
+|-------------|----------|----------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the `S3Connection`. If not specified, uses the namespace of the `Bucket`. | No       |
+| `name`      | `string` | Name of the `S3Connection`.                                                            | Yes      |
+
+### BucketQuotasSpec (`quotas`)
+
+| Field        | Type      | Description                                                                                           | Required |
+|--------------|-----------|-------------------------------------------------------------------------------------------------------|----------|
+| `maxSize`    | `string`  | Maximum total object size, as a Kubernetes quantity of whole bytes greater than zero, such as `10Gi`. | No       |
+| `maxObjects` | `integer` | Maximum number of objects, at least `1`.                                                              | No       |
+
+A change to a `Mutable` field is applied at the next reconcile.
 
 `name` follows the S3 bucket naming rules — 3 to 63 characters of lowercase letters, digits, dots and hyphens, starting and ending with a letter or digit — and is enforced by the CRD schema.
 

@@ -93,7 +93,7 @@ public final class KubernetesService {
                 .get();
 
         if (existing != null && !isOwnedBy(existing, owner)) {
-            throw new IllegalStateException("A Secret of this name already exists and is not owned by this resource, so it is left untouched. Choose a different secretName, or delete the Secret [secret.namespace=%s, secret.name=%s]".formatted(
+            throw new IllegalStateException("A Secret of this name already exists and is not owned by this resource, so it is left untouched. Choose a different secretName, or delete the Secret [secret=%s/%s]".formatted(
                     namespace,
                     secretName
             ));

@@ -198,7 +198,7 @@ public class AccessKeyReconciler
             if (isNamespaceTerminating(kubernetesClient, resource)) {
                 // Release without backend cleanup, otherwise the namespace deletion hangs forever.
                 log.warn(
-                        "The namespace is being deleted and the S3Connection is gone, releasing the AccessKey without deleting the key on the backend [resource={}/{}, accessKey.id={}]",
+                        "The namespace is being deleted and the S3Connection is gone, releasing the AccessKey without deleting the key on the backend [resource={}/{}, accessKeyId={}]",
                         namespace,
                         name,
                         accessKeyId
@@ -226,7 +226,7 @@ public class AccessKeyReconciler
 
             if (accessKeyOptional.isEmpty()) {
                 log.info(
-                        "The access key no longer exists on the backend, nothing to delete [resource={}/{}, accessKey.id={}]",
+                        "The access key no longer exists on the backend, nothing to delete [resource={}/{}, accessKeyId={}]",
                         namespace,
                         name,
                         accessKeyId
@@ -360,7 +360,7 @@ public class AccessKeyReconciler
             }
 
             log.warn(
-                    "The recorded access key no longer exists on the backend, looking it up by name [resource={}/{}, accessKey.id={}]",
+                    "The recorded access key no longer exists on the backend, looking it up by name [resource={}/{}, recordedAccessKeyId={}]",
                     resource.getMetadata().getNamespace(),
                     resource.getMetadata().getName(),
                     recordedAccessKeyId
@@ -392,7 +392,7 @@ public class AccessKeyReconciler
             var other = managedElsewhere.get();
 
             throw new IllegalStateException(
-                    "The access key named %s is already managed by AccessKey %s/%s. Use a different spec.name [accessKey.id=%s]".formatted(
+                    "The access key named %s is already managed by AccessKey %s/%s. Use a different spec.name [accessKeyId=%s]".formatted(
                             resource.getSpec().getName(),
                             other.getMetadata().getNamespace(),
                             other.getMetadata().getName(),
@@ -433,9 +433,10 @@ public class AccessKeyReconciler
         }
 
         log.info(
-                "Wrote AccessKey credentials [resource={}/{}, secret.name={}]",
+                "Wrote AccessKey credentials [resource={}/{}, secret={}/{}]",
                 resource.getMetadata().getNamespace(),
                 resource.getMetadata().getName(),
+                resource.getMetadata().getNamespace(),
                 secretName
         );
 

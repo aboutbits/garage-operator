@@ -50,7 +50,15 @@ spec:
 
 `adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `S3Connection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token.
 
-The token needs access to the Admin API endpoint `GetClusterHealth`. The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
+The token needs access to these Admin API endpoints:
+
+| Used by                      | Endpoints                                                                      |
+|------------------------------|--------------------------------------------------------------------------------|
+| `S3Connection`               | `GetClusterHealth`                                                             |
+| [`Bucket`](bucket.md)        | `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket`, `DeleteBucket` |
+| [`AccessKey`](access-key.md) | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
+
+The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 
 ## Status
 

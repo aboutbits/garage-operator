@@ -141,12 +141,14 @@ public class GarageService {
                 .toList();
 
         if (matches.size() > 1) {
+            var accessKeyIds = matches.stream()
+                    .map(ListKeysResponseItem::id)
+                    .collect(Collectors.joining(", "));
+
             throw new IllegalStateException(
-                    "More than one access key is named %s on the backend, so it is ambiguous which one to manage. Delete or rename the extra keys [accessKey.ids=%s]".formatted(
+                    "More than one access key is named %s on the backend, so it is ambiguous which one to manage. Delete or rename the extra keys [accessKeyIds=%s]".formatted(
                             name,
-                            matches.stream()
-                                    .map(ListKeysResponseItem::id)
-                                    .collect(Collectors.joining(", "))
+                            accessKeyIds
                     )
             );
         }

@@ -174,7 +174,7 @@ public class BucketReconciler
             if (isNamespaceTerminating(kubernetesClient, resource)) {
                 // Release without backend cleanup (no data is lost), otherwise the namespace deletion hangs.
                 log.warn(
-                        "The namespace is being deleted and the S3Connection is gone, releasing the Bucket without deleting the bucket on the backend [resource={}/{}, bucket.id={}]",
+                        "The namespace is being deleted and the S3Connection is gone, releasing the Bucket without deleting the bucket on the backend [resource={}/{}, bucketId={}]",
                         namespace,
                         name,
                         bucketId
@@ -202,7 +202,7 @@ public class BucketReconciler
 
             if (bucketOptional.isEmpty()) {
                 log.info(
-                        "The Bucket no longer exists on the backend, nothing to delete [resource={}/{}, bucket.id={}]",
+                        "The Bucket no longer exists on the backend, nothing to delete [resource={}/{}, bucketId={}]",
                         namespace,
                         name,
                         bucketId
@@ -358,7 +358,7 @@ public class BucketReconciler
             }
 
             log.warn(
-                    "The recorded bucket no longer exists on the backend, looking it up by name [resource={}/{}, bucket.id={}]",
+                    "The recorded bucket no longer exists on the backend, looking it up by name [resource={}/{}, recordedBucketId={}]",
                     resource.getMetadata().getNamespace(),
                     resource.getMetadata().getName(),
                     recordedBucketId
@@ -390,7 +390,7 @@ public class BucketReconciler
             var other = managedElsewhere.get();
 
             throw new IllegalStateException(
-                    "The bucket named %s is already managed by Bucket %s/%s [bucket.id=%s]".formatted(
+                    "The bucket named %s is already managed by Bucket %s/%s [bucketId=%s]".formatted(
                             resource.getSpec().getName(),
                             other.getMetadata().getNamespace(),
                             other.getMetadata().getName(),
