@@ -29,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -64,6 +65,13 @@ import java.util.stream.Collectors;
 public class BucketAccessReconciler
         extends BaseReconciler<BucketAccess, BucketAccessStatus>
         implements Reconciler<BucketAccess>, Cleaner<BucketAccess> {
+    /// The one that already holds the grant first, so a newer one created in the same second cannot take it over.
+    /// Then the oldest: RFC 3339 timestamps in UTC sort as strings, and the uid breaks a tie within the same second.
+    private static final Comparator<BucketAccess> GRANT_ORDER = Comparator
+            .comparing((BucketAccess bucketAccess) -> !hasRecordedGrant(bucketAccess))
+            .thenComparing(bucketAccess -> bucketAccess.getMetadata().getCreationTimestamp())
+            .thenComparing(bucketAccess -> bucketAccess.getMetadata().getUid());
+
     private final BucketAccessService bucketAccessService;
 
     private final KubernetesClient kubernetesClient;
@@ -229,6 +237,17 @@ public class BucketAccessReconciler
             );
         }
 
+        try {
+            // Before anything is recorded: deleting a refused BucketAccess must not revoke the other one's grant.
+            requireNotGrantedElsewhere(resource, bucketRef, accessKeyRef);
+        } catch (Exception e) {
+            return handleError(
+                    resource,
+                    status,
+                    e
+            );
+        }
+
         return grant(
                 resource,
                 status,
@@ -345,9 +364,6 @@ public class BucketAccessReconciler
             String accessKeyId
     ) {
         try {
-            // Before anything is recorded: deleting a refused BucketAccess must not revoke the other one's grant.
-            requireNotGrantedElsewhere(resource, bucketId, accessKeyId);
-
             // A Bucket or AccessKey recreated under the same name resolves to a different backend
             // object; revoke the previous grant first, or it stays behind untracked.
             if (!revokePreviousGrant(resource, status, connectionRef, bucketId, accessKeyId)) {
@@ -480,35 +496,62 @@ public class BucketAccessReconciler
         return connectionRef;
     }
 
-    /// Two grants on the same pair would overwrite each other's permissions at every reconcile.
+    /// Two grants on the same pair would overwrite each other's permissions at every reconcile, so only one grants, in
+    /// [#GRANT_ORDER]. The pair is found from the spec, not from the recorded ids: two BucketAccesses applied together
+    /// reconcile before either records its ids. A `Bucket` and an `AccessKey` each have one manager, so the qualified
+    /// references identify the pair. One that is being deleted still counts, or its revoke would race the new grant.
     private void requireNotGrantedElsewhere(
             BucketAccess resource,
-            String bucketId,
-            String accessKeyId
+            ResourceRef bucketRef,
+            ResourceRef accessKeyRef
     ) {
-        var grantedElsewhere = kubernetesClient.resources(BucketAccess.class)
+        var olderGrant = kubernetesClient.resources(BucketAccess.class)
                 .inAnyNamespace()
                 .list()
                 .getItems()
                 .stream()
                 .filter(other -> !Objects.equals(other.getMetadata().getUid(), resource.getMetadata().getUid()))
-                .filter(other -> other.getStatus() != null
-                        && bucketId.equals(other.getStatus().getBucketId())
-                        && accessKeyId.equals(other.getStatus().getAccessKeyId()))
-                .findFirst();
+                .filter(other -> grantsPair(other, bucketRef, accessKeyRef))
+                .filter(other -> GRANT_ORDER.compare(other, resource) < 0)
+                .min(GRANT_ORDER);
 
-        if (grantedElsewhere.isPresent()) {
-            var other = grantedElsewhere.get();
+        if (olderGrant.isPresent()) {
+            var other = olderGrant.get();
 
             throw new IllegalStateException(
-                    "The AccessKey already has a grant on this bucket from BucketAccess %s/%s. Delete one of the two BucketAccesses [bucketId=%s, accessKeyId=%s]".formatted(
+                    "The AccessKey already has a grant on this bucket from BucketAccess %s/%s. Delete one of the two BucketAccesses [spec.bucketRef=%s/%s, spec.accessKeyRef=%s/%s]".formatted(
                             other.getMetadata().getNamespace(),
                             other.getMetadata().getName(),
-                            bucketId,
-                            accessKeyId
+                            bucketRef.getNamespace(),
+                            bucketRef.getName(),
+                            accessKeyRef.getNamespace(),
+                            accessKeyRef.getName()
                     )
             );
         }
+    }
+
+    private static boolean hasRecordedGrant(BucketAccess bucketAccess) {
+        var status = bucketAccess.getStatus();
+
+        //noinspection ConstantConditions
+        return status != null && status.getBucketId() != null && status.getAccessKeyId() != null;
+    }
+
+    private boolean grantsPair(
+            BucketAccess other,
+            ResourceRef bucketRef,
+            ResourceRef accessKeyRef
+    ) {
+        var otherNamespace = other.getMetadata().getNamespace();
+
+        return bucketAccessService.sameResource(
+                bucketAccessService.qualify(other.getSpec().getBucketRef(), otherNamespace),
+                bucketRef
+        ) && bucketAccessService.sameResource(
+                bucketAccessService.qualify(other.getSpec().getAccessKeyRef(), otherNamespace),
+                accessKeyRef
+        );
     }
 
     private UpdateControl<BucketAccess> previousGrantNotRevocable(

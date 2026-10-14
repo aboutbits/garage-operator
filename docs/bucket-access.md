@@ -46,7 +46,7 @@ instead.
 
 What a reference resolves to can still change: a `Bucket` or `AccessKey` deleted and recreated under the same name may stand for a different bucket or key on the backend. The grant follows it — the previous grant, as recorded in the status, is revoked first, then the new one is made.
 
-Only one `BucketAccess` grants an `AccessKey` permissions on a given bucket. A second one for the same bucket and key, in any namespace, reports `ERROR` and changes nothing: two complete lists would overwrite each other at every reconcile. Deleting the refused one leaves the other one's grant alone.
+Only one `BucketAccess` grants an `AccessKey` permissions on a given bucket: of all `BucketAccess`es for the same `Bucket` and `AccessKey` resources, in any namespace, the one that already holds the grant, otherwise the oldest one. Every other one reports `ERROR` and changes nothing, because two complete lists would overwrite each other at every reconcile. This also holds for two that are applied together. Deleting a refused one leaves the grant alone, and when the granting one is deleted, the next oldest takes over at its next retry.
 
 The admin token of the `S3Connection` needs access to the Admin API endpoints `ListBuckets`, `GetBucketInfo`, `AllowBucketKey` and `DenyBucketKey`, see [`S3Connection`](s3-connection.md#spec).
 

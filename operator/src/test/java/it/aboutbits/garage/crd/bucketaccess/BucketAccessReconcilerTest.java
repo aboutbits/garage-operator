@@ -1,6 +1,7 @@
 package it.aboutbits.garage.crd.bucketaccess;
 
 import io.fabric8.kubernetes.api.model.NamespaceBuilder;
+import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.junit.QuarkusTest;
 import it.aboutbits.garage._support.testdata.base.TestDataCreator;
@@ -43,6 +44,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -169,6 +171,35 @@ class BucketAccessReconcilerTest {
         );
 
         return ref(s3Connection.getMetadata().getNamespace(), s3Connection.getMetadata().getName());
+    }
+
+    private BucketAccess createUnwaited(
+            String namespace,
+            String name,
+            ResourceRef bucketRef,
+            ResourceRef accessKeyRef,
+            BucketPermission... permissions
+    ) {
+        var bucketAccess = new BucketAccess();
+
+        bucketAccess.setMetadata(new ObjectMetaBuilder()
+                .withNamespace(namespace)
+                .withName(name)
+                .build()
+        );
+
+        var spec = new BucketAccessSpec();
+
+        spec.setBucketRef(bucketRef);
+        spec.setAccessKeyRef(accessKeyRef);
+        spec.setPermissions(List.of(permissions));
+
+        bucketAccess.setSpec(spec);
+
+        return kubernetesClient.resources(BucketAccess.class)
+                .inNamespace(namespace)
+                .resource(bucketAccess)
+                .create();
     }
 
     private ResourceRef ref(String name) {
@@ -346,6 +377,49 @@ class BucketAccessReconcilerTest {
             // Nothing recorded, so deleting the refused one cannot revoke the first one's grant.
             assertThat(refused.getStatus().getBucketId()).isNull();
             assertThat(refused.getStatus().getAccessKeyId()).isNull();
+        }
+
+        @Test
+        @DisplayName("Two BucketAccesses for the same pair applied together should leave only the oldest granting")
+        void appliedTogether_onlyOldestGrants() {
+            // given
+            var connectionRef = given.readyConnection();
+            var bucketRef = givenReadyBucket(connectionRef, "test-together-bucket");
+            var accessKeyRef = givenReadyAccessKey(connectionRef, "test-together-key");
+
+            var namespace = kubernetesClient.getNamespace();
+
+            // when
+            // Created back to back, without waiting for a status, so both reconcile before either records its ids.
+            var readWrite = createUnwaited(namespace, "test-together-read-write", bucketRef, accessKeyRef, BucketPermission.READ, BucketPermission.WRITE);
+            var readOnly = createUnwaited(namespace, "test-together-read-only", bucketRef, accessKeyRef, BucketPermission.READ);
+
+            // then
+            // The same order the operator uses: creationTimestamp, then uid.
+            var oldestFirst = Comparator
+                    .comparing((BucketAccess bucketAccess) -> bucketAccess.getMetadata().getCreationTimestamp())
+                    .thenComparing(bucketAccess -> bucketAccess.getMetadata().getUid());
+
+            var readWriteWins = oldestFirst.compare(readWrite, readOnly) < 0;
+            var winner = readWriteWins ? readWrite : readOnly;
+            var loser = readWriteWins ? readOnly : readWrite;
+
+            awaitPhase(kubernetesClient, winner, CRPhase.READY);
+
+            var refused = awaitPhase(kubernetesClient, loser, CRPhase.ERROR);
+
+            assertThat(refused.getStatus().getMessage()).contains(
+                    "already has a grant on this bucket from BucketAccess %s/%s".formatted(
+                            winner.getMetadata().getNamespace(),
+                            winner.getMetadata().getName()
+                    )
+            );
+            assertThat(refused.getStatus().getBucketId()).isNull();
+
+            var permissions = backendPermissions(awaitPhase(kubernetesClient, winner, CRPhase.READY));
+
+            assertThat(permissions.read()).isTrue();
+            assertThat(permissions.write()).isEqualTo(readWriteWins);
         }
 
         @Test
