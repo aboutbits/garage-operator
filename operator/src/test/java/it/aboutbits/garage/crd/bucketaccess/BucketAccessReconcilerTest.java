@@ -1,12 +1,10 @@
 package it.aboutbits.garage.crd.bucketaccess;
 
-import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.quarkus.test.junit.QuarkusTest;
 import it.aboutbits.garage._support.testdata.base.TestUtil;
 import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.CRPhase;
-import it.aboutbits.garage.core.CRStatus;
 import it.aboutbits.garage.core.ReclaimPolicy;
 import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.core.adminapi.GarageAdminApi;
@@ -15,8 +13,6 @@ import it.aboutbits.garage.core.adminapi.dto.ApiBucketKeyPerm;
 import it.aboutbits.garage.core.adminapi.dto.GetBucketInfoKey;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.bucket.Bucket;
-import it.aboutbits.garage.crd.garagecluster.GarageCluster;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -42,11 +38,15 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import static it.aboutbits.garage._support.testdata.base.TestUtil.AWAIT_SECONDS;
+import static it.aboutbits.garage._support.testdata.base.TestUtil.awaitPhase;
+import static it.aboutbits.garage.core.BaseReconciler.RETRY_SECONDS;
 import static it.aboutbits.garage.crd.accesskey.AccessKeyReconciler.SECRET_DATA_ACCESS_KEY_ID;
 import static it.aboutbits.garage.crd.accesskey.AccessKeyReconciler.SECRET_DATA_SECRET_ACCESS_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,8 +64,6 @@ import static org.awaitility.Awaitility.await;
 @RequiredArgsConstructor
 @NullMarked
 class BucketAccessReconcilerTest {
-    private static final long AWAIT_SECONDS = 60;
-
     /// Must match `s3_region` in the Dev Service's garage.toml.
     private static final Region GARAGE_REGION = Region.of("garage");
 
@@ -127,24 +125,6 @@ class BucketAccessReconcilerTest {
     // Fixtures
     // ---------------------------------------------------------------------------------------------
 
-    private void givenAppliedLayout() {
-        var garageCluster = given.one()
-                .garageCluster()
-                .returnFirst();
-
-        awaitReady(GarageCluster.class, garageCluster.getMetadata().getName());
-    }
-
-    private ResourceRef givenReadyConnection() {
-        var s3Connection = given.one()
-                .s3Connection()
-                .returnFirst();
-
-        awaitReady(S3Connection.class, s3Connection.getMetadata().getName());
-
-        return ref(s3Connection.getMetadata().getName());
-    }
-
     private ResourceRef givenReadyBucket(
             ResourceRef connectionRef,
             String bucketName
@@ -155,7 +135,7 @@ class BucketAccessReconcilerTest {
                 .withBucketName(bucketName)
                 .returnFirst();
 
-        awaitReady(Bucket.class, bucket.getMetadata().getName());
+        awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
         return ref(bucket.getMetadata().getName());
     }
@@ -170,7 +150,7 @@ class BucketAccessReconcilerTest {
                 .withKeyName(keyName)
                 .returnFirst();
 
-        awaitReady(AccessKey.class, accessKey.getMetadata().getName());
+        awaitPhase(kubernetesClient, accessKey, CRPhase.READY);
 
         return ref(accessKey.getMetadata().getName());
     }
@@ -178,51 +158,10 @@ class BucketAccessReconcilerTest {
     private ResourceRef ref(String name) {
         var ref = new ResourceRef();
 
-        ref.setName(name);
         ref.setNamespace(kubernetesClient.getNamespace());
+        ref.setName(name);
 
         return ref;
-    }
-
-    private <T extends CustomResource<?, ? extends CRStatus>> void awaitReady(
-            Class<T> type,
-            String name
-    ) {
-        kubernetesClient.resources(type)
-                .inNamespace(kubernetesClient.getNamespace())
-                .withName(name)
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == CRPhase.READY,
-                        AWAIT_SECONDS,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    private BucketAccess awaitPhase(
-            BucketAccess bucketAccess,
-            CRPhase expectedPhase,
-            long seconds
-    ) {
-        //noinspection ConstantConditions
-        return kubernetesClient.resources(BucketAccess.class)
-                .inNamespace(bucketAccess.getMetadata().getNamespace())
-                .withName(bucketAccess.getMetadata().getName())
-                .waitUntilCondition(
-                        item -> item != null
-                                && item.getStatus() != null
-                                && item.getStatus().getPhase() == expectedPhase,
-                        seconds,
-                        TimeUnit.SECONDS
-                );
-    }
-
-    private BucketAccess awaitPhase(
-            BucketAccess bucketAccess,
-            CRPhase expectedPhase
-    ) {
-        return awaitPhase(bucketAccess, expectedPhase, AWAIT_SECONDS);
     }
 
     /// What Garage itself records for the key on the bucket, by backend identifiers.
@@ -289,8 +228,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("The listed permissions should be granted on the backend, and nothing more")
         void permissions_areGranted() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-grant-bucket");
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-grant-key");
 
@@ -303,7 +241,7 @@ class BucketAccessReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(bucketAccess, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             var permissions = backendPermissions(reconciled);
 
@@ -316,8 +254,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("Removing a permission from the list should revoke it on the backend")
         void droppedPermission_isRevoked() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-downgrade-bucket");
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-downgrade-key");
 
@@ -328,10 +265,10 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ, BucketPermission.WRITE, BucketPermission.OWNER)
                     .returnFirst();
 
-            awaitPhase(bucketAccess, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             // when
-            given.one()
+            var updated = given.one()
                     .bucketAccess()
                     .withName(bucketAccess.getMetadata().getName())
                     .withBucketRef(bucketRef)
@@ -340,15 +277,13 @@ class BucketAccessReconcilerTest {
                     .returnFirst();
 
             // then
-            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
-                    .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .untilAsserted(() -> {
-                        var permissions = backendPermissions(awaitPhase(bucketAccess, CRPhase.READY));
+            var reconciled = awaitPhase(kubernetesClient, updated, CRPhase.READY);
 
-                        assertThat(permissions.read()).isTrue();
-                        assertThat(permissions.write()).isFalse();
-                        assertThat(permissions.owner()).isFalse();
-                    });
+            var permissions = backendPermissions(reconciled);
+
+            assertThat(permissions.read()).isTrue();
+            assertThat(permissions.write()).isFalse();
+            assertThat(permissions.owner()).isFalse();
         }
     }
 
@@ -358,8 +293,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("The credentials in the AccessKey's Secret should be able to write and read the bucket")
         void readWriteGrant_worksOverS3() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-e2e-bucket");
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-e2e-key");
 
@@ -370,7 +304,7 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ, BucketPermission.WRITE)
                     .returnFirst();
 
-            awaitPhase(bucketAccess, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             try (var s3 = s3ClientFor(accessKeyRef)) {
                 // when
@@ -392,8 +326,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("A read-only grant should refuse writes over S3")
         void readOnlyGrant_refusesWrites() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-readonly-bucket");
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-readonly-key");
 
@@ -404,7 +337,7 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ)
                     .returnFirst();
 
-            awaitPhase(bucketAccess, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             try (var s3 = s3ClientFor(accessKeyRef)) {
                 // precondition: the credentials work, so the refusal is down to the grant
@@ -429,8 +362,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("Deleting the BucketAccess should revoke the credentials' access over S3")
         void deletedGrant_revokesAccess() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-revoked-bucket");
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-revoked-key");
 
@@ -441,7 +373,7 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ)
                     .returnFirst();
 
-            var reconciled = awaitPhase(bucketAccess, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             // when
             TestUtil.deleteResource(kubernetesClient, BucketAccess.class);
@@ -467,8 +399,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("A grant waiting on its AccessKey should proceed as soon as the key is ready, not on the next poll")
         void pendingGrant_reactsToAccessKey() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-waiting-bucket");
 
             // The AccessKey does not exist yet.
@@ -481,12 +412,14 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ)
                     .returnFirst();
 
-            var pending = awaitPhase(bucketAccess, CRPhase.PENDING);
+            var pending = awaitPhase(kubernetesClient, bucketAccess, CRPhase.PENDING);
 
             // precondition: the grant is waiting on the missing AccessKey, not on something else
             assertThat(pending.getStatus().getMessage()).contains("AccessKey does not exist or is not ready yet");
 
             // when
+            var start = System.nanoTime();
+
             given.one()
                     .accessKey()
                     .withName("test-late-access-key")
@@ -495,9 +428,11 @@ class BucketAccessReconcilerTest {
                     .returnFirst();
 
             // then
-            // Well inside the 60 second retry: only the watch on AccessKey can get it there this
-            // quickly.
-            var reconciled = awaitPhase(bucketAccess, CRPhase.READY, 30);
+            var reconciled = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
+
+            // Well inside the retry: only the watch on AccessKey can get it there this quickly.
+            assertThat(Duration.ofNanos(System.nanoTime() - start))
+                    .isLessThan(Duration.ofSeconds(RETRY_SECONDS / 2));
 
             assertThat(backendPermissions(reconciled).read()).isTrue();
         }
@@ -506,9 +441,21 @@ class BucketAccessReconcilerTest {
         @DisplayName("A Bucket and an AccessKey on different S3Connections should be refused")
         void differentConnections_areRefused() {
             // given
-            givenAppliedLayout();
-            var bucketConnectionRef = givenReadyConnection();
-            var accessKeyConnectionRef = givenReadyConnection();
+            var bucketConnectionRef = given.readyConnection();
+
+            // A second connection to the same Garage, without a second GarageCluster, which the operator refuses.
+            var accessKeyConnection = awaitPhase(
+                    kubernetesClient,
+                    given.one()
+                            .s3Connection()
+                            .returnFirst(),
+                    CRPhase.READY
+            );
+
+            var accessKeyConnectionRef = new ResourceRef();
+
+            accessKeyConnectionRef.setNamespace(accessKeyConnection.getMetadata().getNamespace());
+            accessKeyConnectionRef.setName(accessKeyConnection.getMetadata().getName());
 
             var bucketRef = givenReadyBucket(bucketConnectionRef, "test-split-bucket");
             var accessKeyRef = givenReadyAccessKey(accessKeyConnectionRef, "test-split-key");
@@ -522,7 +469,7 @@ class BucketAccessReconcilerTest {
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(bucketAccess, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, bucketAccess, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains("different S3Connections");
         }
@@ -531,8 +478,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("A grant should still be deletable after its AccessKey is gone")
         void grantOnDeletedAccessKey_isDeletable() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var bucketRef = givenReadyBucket(connectionRef, "test-orphan-bucket");
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-orphan-key");
 
@@ -543,7 +489,7 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ)
                     .returnFirst();
 
-            awaitPhase(bucketAccess, CRPhase.READY);
+            awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             // Deleting the key revokes its grants on the backend; the BucketAccess must not then
             // get stuck trying to revoke something that is already gone.
@@ -563,8 +509,7 @@ class BucketAccessReconcilerTest {
         @DisplayName("When the referenced Bucket is recreated for another bucket, the grant should move and the old one be revoked")
         void recreatedBucket_movesGrant() {
             // given
-            givenAppliedLayout();
-            var connectionRef = givenReadyConnection();
+            var connectionRef = given.readyConnection();
             var accessKeyRef = givenReadyAccessKey(connectionRef, "test-moving-key");
 
             var original = given.one()
@@ -574,7 +519,7 @@ class BucketAccessReconcilerTest {
                     .withReclaimPolicy(ReclaimPolicy.RETAIN)
                     .returnFirst();
 
-            awaitReady(Bucket.class, original.getMetadata().getName());
+            awaitPhase(kubernetesClient, original, CRPhase.READY);
 
             var bucketAccess = given.one()
                     .bucketAccess()
@@ -583,7 +528,7 @@ class BucketAccessReconcilerTest {
                     .withPermissions(BucketPermission.READ, BucketPermission.WRITE)
                     .returnFirst();
 
-            var granted = awaitPhase(bucketAccess, CRPhase.READY);
+            var granted = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
             var originalBucketId = Objects.requireNonNull(granted.getStatus().getBucketId());
             var accessKeyId = Objects.requireNonNull(granted.getStatus().getAccessKeyId());
@@ -607,7 +552,7 @@ class BucketAccessReconcilerTest {
                     .withBucketName("test-replacement-bucket")
                     .returnFirst();
 
-            awaitReady(Bucket.class, replacement.getMetadata().getName());
+            awaitPhase(kubernetesClient, replacement, CRPhase.READY);
 
             // then
             //noinspection ConstantConditions

@@ -84,38 +84,24 @@ Deleting a `BucketAccess` revokes every permission the key holds on the bucket.
 
 If the key or the bucket is already gone — deleting either one revokes its grants on the backend anyway — deletion completes without error. If nothing was ever granted, because the resource never left `PENDING`, deletion completes immediately.
 
-If the `S3Connection` the grant was made on is missing, the resource stays until it is back — except while the whole namespace is being deleted, where waiting for a connection that is being deleted too would block the namespace forever. The resource is then released without revoking the grant.
+If the `S3Connection` the grant was made on is missing or not `READY`, the resource stays until it is back, and is retried every 60 seconds — except while the whole namespace is being deleted, where waiting for a connection that is being deleted too would block the namespace forever. The resource is then released without revoking the grant.
 
 ## Using the credentials
 
-The `AccessKey`'s Secret holds `accessKeyId` and `secretAccessKey`. Garage addresses buckets by path, and its region is whatever `s3_region` is set to in `garage.toml` (`garage` in the AboutBits Helm chart). With the AWS SDK for Java v2:
+The `AccessKey`'s Secret holds `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Garage addresses buckets by path, and its region is whatever `s3_region` is set to in `garage.toml` (`garage` in the AboutBits Helm chart). With the AWS SDK for Java v2:
 
 ```java
 S3Client.builder()
-        .
-
-endpointOverride(URI.create("http://acme-garage.acme.svc:3900"))
-        .
-
-region(Region.of("garage"))
-        .
-
-forcePathStyle(true)
-// See below.
-        .
-
-requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
-        .
-
-responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
-        .
-
-credentialsProvider(StaticCredentialsProvider.create(
-        AwsBasicCredentials.create(accessKeyId, secretAccessKey)
+        .endpointOverride(URI.create("http://acme-garage.acme.svc:3900"))
+        .region(Region.of("garage"))
+        .forcePathStyle(true)
+        // See below.
+        .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
+        .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
+        .credentialsProvider(StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKeyId, secretAccessKey)
         ))
-                .
-
-build();
+        .build();
 ```
 
 > **AWS SDK 2.30 and newer:** since early 2025 the SDKs send a CRC32 checksum with every upload
@@ -133,4 +119,5 @@ build();
 > algorithm line and chains from the wrong previous signature. Over HTTPS the SDK sends *unsigned*
 > chunks with a trailer instead. That path does not have the bug and is covered by Garage's own
 > test suite, though it was not re-tested here. The AWS CLI is unaffected, because it hashes the
-> whole body up front rather than streaming a trailer.
+> whole body up front rather than streaming a trailer. Reported upstream as
+> [garage#1549](https://git.deuxfleurs.fr/Deuxfleurs/garage/issues/1549).

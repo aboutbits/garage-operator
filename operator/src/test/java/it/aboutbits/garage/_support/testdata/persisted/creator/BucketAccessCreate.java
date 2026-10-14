@@ -7,7 +7,6 @@ import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.crd.bucketaccess.BucketAccess;
 import it.aboutbits.garage.crd.bucketaccess.BucketAccessSpec;
 import it.aboutbits.garage.crd.bucketaccess.BucketPermission;
-import lombok.AccessLevel;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -27,9 +26,6 @@ public class BucketAccessCreate extends TestDataCreator<BucketAccess> {
 
     private @Nullable String withNamespace;
 
-    @Setter(AccessLevel.NONE)
-    private boolean withoutNamespace = false;
-
     private @Nullable String withName;
 
     private @Nullable ResourceRef withBucketRef;
@@ -44,11 +40,6 @@ public class BucketAccessCreate extends TestDataCreator<BucketAccess> {
     ) {
         super(numberOfItems);
         this.kubernetesClient = kubernetesClient;
-    }
-
-    public BucketAccessCreate withoutNamespace() {
-        this.withoutNamespace = true;
-        return this;
     }
 
     public BucketAccessCreate withPermissions(BucketPermission... permissions) {
@@ -93,11 +84,7 @@ public class BucketAccessCreate extends TestDataCreator<BucketAccess> {
                 );
     }
 
-    private @Nullable String getNamespace() {
-        if (withoutNamespace) {
-            return null;
-        }
-
+    private String getNamespace() {
         if (withNamespace != null) {
             return withNamespace;
         }

@@ -62,9 +62,6 @@ import java.util.stream.Collectors;
 public class BucketAccessReconciler
         extends BaseReconciler<BucketAccess, BucketAccessStatus>
         implements Reconciler<BucketAccess>, Cleaner<BucketAccess> {
-    /// Only a safety net; the `Bucket` and `AccessKey` watches normally trigger far sooner.
-    private static final long RETRY_SECONDS = 60;
-
     private final BucketAccessService bucketAccessService;
 
     private final KubernetesClient kubernetesClient;
@@ -148,7 +145,7 @@ public class BucketAccessReconciler
             return pending(
                     resource,
                     status,
-                    "The specified Bucket does not exist or is not ready yet [resource=%s/%s]".formatted(
+                    "The specified Bucket does not exist or is not ready yet [spec.bucketRef=%s/%s]".formatted(
                             bucketRef.getNamespace(),
                             bucketRef.getName()
                     )
@@ -171,7 +168,7 @@ public class BucketAccessReconciler
             return pending(
                     resource,
                     status,
-                    "The specified AccessKey does not exist or is not ready yet [resource=%s/%s]".formatted(
+                    "The specified AccessKey does not exist or is not ready yet [spec.accessKeyRef=%s/%s]".formatted(
                             accessKeyRef.getNamespace(),
                             accessKeyRef.getName()
                     )
@@ -210,7 +207,7 @@ public class BucketAccessReconciler
             return pending(
                     resource,
                     status,
-                    "The specified S3Connection does not exist or is not ready yet [resource=%s/%s]".formatted(
+                    "The specified S3Connection does not exist or is not ready yet [bucketConnectionRef=%s/%s]".formatted(
                             bucketConnectionRef.getNamespace(),
                             bucketConnectionRef.getName()
                     )
@@ -287,15 +284,15 @@ public class BucketAccessReconciler
                 return DeleteControl.defaultDelete();
             }
 
-            status.setMessage("The S3Connection the permissions were granted on no longer exists or is not ready yet [resource=%s/%s]".formatted(
-                    getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
-                    connectionRef.getName()
-            ));
-
-            context.getClient().resource(resource).patchStatus();
-
-            return DeleteControl.noFinalizerRemoval()
-                    .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
+            return failCleanup(
+                    resource,
+                    status,
+                    context,
+                    "The S3Connection the permissions were granted on no longer exists or is not ready yet [status.connectionNamespace=%s, status.connectionName=%s]".formatted(
+                            getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
+                            connectionRef.getName()
+                    )
+            );
         }
 
         var s3Connection = s3ConnectionOptional.get();
@@ -310,12 +307,12 @@ public class BucketAccessReconciler
                     e
             );
 
-            status.setMessage("Revocation failed: %s".formatted(e.getMessage()));
-
-            context.getClient().resource(resource).patchStatus();
-
-            return DeleteControl.noFinalizerRemoval()
-                    .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
+            return failCleanup(
+                    resource,
+                    status,
+                    context,
+                    "Revocation failed: %s".formatted(e.getMessage())
+            );
         }
     }
 
@@ -339,7 +336,7 @@ public class BucketAccessReconciler
                 return pending(
                         resource,
                         status,
-                        "The previous grant cannot be revoked yet, because its S3Connection does not exist or is not ready [resource=%s/%s]".formatted(
+                        "The previous grant cannot be revoked yet, because its S3Connection does not exist or is not ready [status.connectionNamespace=%s, status.connectionName=%s]".formatted(
                                 status.getConnectionNamespace(),
                                 status.getConnectionName()
                         )
@@ -454,6 +451,7 @@ public class BucketAccessReconciler
         status.updatePhase(CRPhase.PENDING)
                 .setMessage(message);
 
+        // Only a safety net; the `Bucket` and `AccessKey` watches normally trigger far sooner.
         return UpdateControl.patchStatus(resource)
                 .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
     }

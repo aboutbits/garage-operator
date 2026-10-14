@@ -232,20 +232,13 @@ spec:
     - write
 ```
 
-The application then reads its credentials from the Secret. The S3 endpoint and region are not part of it:
+The application then reads its credentials from the Secret. Its keys are the environment variables the AWS SDKs read, so `envFrom` is enough. The S3 endpoint and region are not part of it:
 
 ```yaml
+envFrom:
+  - secretRef:
+      name: acme-app-s3
 env:
-  - name: AWS_ACCESS_KEY_ID
-    valueFrom:
-      secretKeyRef:
-        name: acme-app-s3
-        key: accessKeyId
-  - name: AWS_SECRET_ACCESS_KEY
-    valueFrom:
-      secretKeyRef:
-        name: acme-app-s3
-        key: secretAccessKey
   - name: AWS_ENDPOINT_URL_S3
     value: http://acme-garage.acme.svc:3900
   # `s3_region` in garage.toml; the AboutBits Helm chart uses `garage`.
