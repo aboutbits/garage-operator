@@ -74,7 +74,7 @@ public class GarageClusterService {
     NodeAssignedRole desiredRole(GarageClusterLayoutSpec layoutSpec) {
         return new NodeAssignedRole(
                 layoutSpec.getZone(),
-                Quantities.toBytes(layoutSpec.getCapacity(), "layout capacity"),
+                Quantities.toBytes(layoutSpec.getCapacity(), "spec.layout.capacity"),
                 List.copyOf(layoutSpec.getTags())
         );
     }

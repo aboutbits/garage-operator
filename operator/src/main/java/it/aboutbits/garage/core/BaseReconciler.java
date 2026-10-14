@@ -124,7 +124,8 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
             E exception
     ) {
         log.error(
-                "Failed to reconcile resource [resource={}]",
+                "Failed to reconcile resource [resource={}/{}]",
+                resource.getMetadata().getNamespace(),
                 resource.getMetadata().getName(),
                 exception
         );

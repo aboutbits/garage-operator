@@ -60,8 +60,8 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
         var item = new S3Connection();
 
         item.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
                 .withNamespace(namespace)
+                .withName(name)
                 .build()
         );
 

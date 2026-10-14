@@ -92,8 +92,8 @@ public class SecretKeyRefCreate extends TestDataCreator<SecretKeyRef> {
 
         var secretKeyRef = new SecretKeyRef();
 
-        secretKeyRef.setName(name);
         secretKeyRef.setNamespace(namespace);
+        secretKeyRef.setName(name);
         secretKeyRef.setKey(key);
 
         return secretKeyRef;

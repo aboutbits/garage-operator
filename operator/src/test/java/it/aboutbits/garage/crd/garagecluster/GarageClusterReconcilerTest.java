@@ -24,7 +24,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -246,6 +249,46 @@ class GarageClusterReconcilerTest {
             assertThat(garageAdminApi().getClusterLayout().version()).isEqualTo(layoutVersion);
 
             assertThat(awaitPhase(first, CRPhase.READY).getStatus().getNodeId()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("An error after READY should not keep the health of the last READY")
+        void errorAfterReady_clearsHealth() {
+            // given
+            var adminSecretRef = given.one()
+                    .secretKeyRef()
+                    .withToken(garageAdminToken)
+                    .returnFirst();
+
+            var garageCluster = given.one()
+                    .garageCluster()
+                    .withAdminSecretRef(adminSecretRef)
+                    .returnFirst();
+
+            // precondition: the health is set while READY
+            assertThat(awaitPhase(garageCluster, CRPhase.READY).getStatus().getHealth()).isNotNull();
+
+            kubernetesClient.secrets()
+                    .inNamespace(adminSecretRef.getNamespace())
+                    .withName(adminSecretRef.getName())
+                    .edit(secret -> {
+                        secret.setData(Map.of(
+                                adminSecretRef.getKey(),
+                                Base64.getEncoder().encodeToString("definitely-not-the-admin-token".getBytes(StandardCharsets.UTF_8))
+                        ));
+                        return secret;
+                    });
+
+            // when
+            // A change of the spec triggers the reconcile; a Secret change alone waits for the resync.
+            var edited = editLayout(garageCluster, layout -> layout.setTags(List.of("edited")));
+
+            // then
+            var status = awaitPhase(edited, CRPhase.ERROR).getStatus();
+
+            assertThat(status.getHealth()).isNull();
+            assertThat(status.getStorageNodes()).isZero();
+            assertThat(status.getStorageNodesUp()).isZero();
         }
 
         @Test

@@ -50,6 +50,11 @@ public class GarageClusterReconciler
     ) {
         var status = initializeStatus(resource);
 
+        // Only `ready()` reads the health, so that other outcomes do not show an old value.
+        status.setHealth(null)
+                .setStorageNodes(0)
+                .setStorageNodesUp(0);
+
         var namespace = resource.getMetadata().getNamespace();
         var name = resource.getMetadata().getName();
 

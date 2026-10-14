@@ -4,9 +4,9 @@
 # factor of 1 and the Admin API enabled — so the operator is exercised against the same shape of
 # cluster it manages in production.
 #
-# Note that no cluster layout is configured here. A freshly started Garage node has no layout and
-# serves no S3 traffic until one is assigned, which is exactly the bootstrap situation the
-# GarageCluster reconciler is responsible for.
+# Garage runs without `--single-node`, as the chart does with `garage.singleNode: false`. The node
+# then starts without a layout and serves no S3 traffic until one is assigned, which is exactly the
+# bootstrap situation the GarageCluster reconciler is responsible for.
 
 metadata_dir = "/var/lib/garage/meta"
 data_dir = "/var/lib/garage/data"

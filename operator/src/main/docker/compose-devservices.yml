@@ -3,6 +3,8 @@ services:
     # Keep this in sync with the image the AboutBits Garage Helm chart deploys.
     # https://github.com/aboutbits/helm-garage
     image: dxflrs/garage:v2.4.1
+    # The chart's command with `garage.singleNode: false`, the mode a GarageCluster requires.
+    command: ["/garage", "server"]
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
     tmpfs:

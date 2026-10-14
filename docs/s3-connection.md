@@ -58,7 +58,7 @@ The token needs access to the Admin API endpoint `GetClusterHealth`. The token o
 |-----------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `READY`   | The backend is reachable, the credentials are accepted, and it can serve requests.                                                                      |
 | `PENDING` | Reachable and authenticated, but not ready — for Garage, health is `unavailable`, usually because no layout has been applied. Retried every 30 seconds. |
-| `ERROR`   | Unreachable, or the credentials were rejected, or the Secret is missing.                                                                                |
+| `ERROR`   | Unreachable, or the credentials were rejected, or the Secret is missing. Retried every 60 seconds.                                                      |
 
 `message` carries the backend detail, for example
 `Garage cluster healthy [storageNodes=1, storageNodesUp=1, partitionsAllOk=256/256]`.

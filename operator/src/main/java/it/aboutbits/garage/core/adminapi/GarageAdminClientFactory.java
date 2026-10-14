@@ -20,9 +20,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
-/// Clients are kept per admin endpoint and token, because each holds a connection pool. Keying by
-/// token too keeps two resources with different tokens for one endpoint from closing each other's
-/// client mid-request. The token is read from its Secret on every call, so rotation applies at once.
+/// Clients are kept per admin endpoint and token, because each holds a connection pool. The token is part of the key,
+/// because each client sends one fixed token through its [BearerTokenFilter]. The token is read from its Secret at
+/// every reconcile, so a new token gets a new client at the next reconcile.
 @ApplicationScoped
 @RequiredArgsConstructor
 @Slf4j

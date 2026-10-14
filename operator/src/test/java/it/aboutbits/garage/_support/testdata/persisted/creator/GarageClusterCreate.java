@@ -68,8 +68,8 @@ public class GarageClusterCreate extends TestDataCreator<GarageCluster> {
         var item = new GarageCluster();
 
         item.setMetadata(new ObjectMetaBuilder()
-                .withName(name)
                 .withNamespace(namespace)
+                .withName(name)
                 .build()
         );
 

@@ -12,6 +12,8 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 | **Kubernetes** | 1.34+                                     |
 
 > **Note:** Kubernetes 1.34+ is required. The tests run against K3s 1.34, and older Kubernetes versions are end-of-life. The Helm chart refuses to install on an older cluster.
+>
+> **Note:** A [`GarageCluster`](docs/garage-cluster.md) needs Garage installed with the chart value `garage.singleNode: false`. With the default `--single-node`, Garage creates its layout itself and does not start again once the operator has applied a newer one. Without a `GarageCluster`, keep the default.
 
 ## Contribute
 
