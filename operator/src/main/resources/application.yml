@@ -26,6 +26,11 @@ quarkus:
       # NOTE that this option is only considered when *not* in production mode
       # as applying the CRD to a production cluster could be dangerous if done automatically.
       apply: true
+      # The CRD check needs the ClusterRole `josdk-crd-validating-cluster-role`. Its name is fixed, so the charts of
+      # two QOSDK operators, such as this one and the AboutBits PostgreSQL Operator, cannot be installed in the same
+      # cluster.
+      # TODO Remove this comment when https://github.com/quarkiverse/quarkus-operator-sdk/issues/1439 is fixed and set validate to true.
+      validate: false
     # Whether controllers should only process events if the associated resource generation
     # has increased since the last reconciliation, otherwise will process all events.
     generation-aware: true

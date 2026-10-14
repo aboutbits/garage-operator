@@ -160,12 +160,12 @@ class HelmTest {
         }
 
         // ./templates/
-        assertThat(chartPath.resolve("templates/clusterrole.yaml")).exists();
         assertThat(chartPath.resolve("templates/deployment.yaml")).exists();
         assertThat(chartPath.resolve("templates/rolebinding.yaml")).exists();
         assertThat(chartPath.resolve("templates/service.yaml")).exists();
         assertThat(chartPath.resolve("templates/serviceaccount.yaml")).exists();
-        assertThat(chartPath.resolve("templates/validating-clusterrolebinding.yaml")).exists();
+        // `quarkus.operator-sdk.crd.validate: false`: its ClusterRole has a fixed name that another QOSDK chart also uses.
+        assertThat(chartPath.resolve("templates/validating-clusterrolebinding.yaml")).doesNotExist();
 
         // The indent of each expression has to match the depth of its field in the Deployment.
         // A wrong `nindent` produces invalid YAML as soon as a user sets the value.
