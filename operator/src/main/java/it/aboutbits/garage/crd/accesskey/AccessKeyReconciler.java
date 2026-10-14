@@ -116,7 +116,7 @@ public class AccessKeyReconciler
 
         if (s3ConnectionOptional.isEmpty()) {
             status.updatePhase(CRPhase.PENDING)
-                    .setMessage("The specified S3Connection does not exist or is not ready yet [resource=%s/%s]".formatted(
+                    .setMessage("The specified S3Connection does not exist or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     ));
@@ -209,7 +209,7 @@ public class AccessKeyReconciler
                     resource,
                     status,
                     context,
-                    "The specified S3Connection no longer exists or is not ready yet [resource=%s/%s]".formatted(
+                    "The specified S3Connection no longer exists or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     )
@@ -283,17 +283,18 @@ public class AccessKeyReconciler
 
         var secretName = secretName(resource);
 
+        // Before a key is created or adopted: a created key would have a secret nobody can read,
+        // and an adopted key would be recorded, so deleting the refused AccessKey would delete it.
+        kubernetesService.requireNoForeignSecret(
+                kubernetesClient,
+                resource,
+                secretName
+        );
+
         AccessKeyInfo accessKey;
         String message;
 
         if (accessKeyOptional.isEmpty()) {
-            // Before the key is created: refused afterwards, it would leave a key whose secret nobody can read.
-            kubernetesService.requireNoForeignSecret(
-                    kubernetesClient,
-                    resource,
-                    secretName
-            );
-
             log.info(
                     "Creating AccessKey [resource={}/{}, spec.name={}]",
                     namespace,

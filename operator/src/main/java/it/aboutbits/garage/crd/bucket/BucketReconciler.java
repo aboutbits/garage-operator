@@ -83,7 +83,7 @@ public class BucketReconciler
 
         if (s3ConnectionOptional.isEmpty()) {
             status.updatePhase(CRPhase.PENDING)
-                    .setMessage("The specified S3Connection does not exist or is not ready yet [resource=%s/%s]".formatted(
+                    .setMessage("The specified S3Connection does not exist or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     ));
@@ -184,7 +184,7 @@ public class BucketReconciler
                     resource,
                     status,
                     context,
-                    "The specified S3Connection no longer exists or is not ready yet [resource=%s/%s]".formatted(
+                    "The specified S3Connection no longer exists or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     )
@@ -328,8 +328,7 @@ public class BucketReconciler
             }
         }
 
-        status.setBucketId(bucket.id())
-                .setObjects(bucket.objects())
+        status.setObjects(bucket.objects())
                 .setBytes(bucket.bytes());
 
         status.updatePhase(CRPhase.READY)

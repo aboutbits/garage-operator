@@ -62,7 +62,7 @@ The AWS SDKs and most S3 clients read these names as environment variables, so a
 
 The Secret is always created **in the `AccessKey`'s own namespace**, and carries an owner reference to the `AccessKey`, so Kubernetes garbage-collects it when the resource goes away. Kubernetes ignores cross-namespace owner references, which is why `secretName` names a Secret rather than referencing an arbitrary namespace — a Secret elsewhere would outlive its owner while still holding live credentials.
 
-If a Secret of that name already exists and is not owned by the `AccessKey`, the operator leaves it untouched and reports `ERROR`. Taking it over would hand it to the `AccessKey`'s lifecycle, and Kubernetes would garbage-collect it — with whatever else it holds — when the `AccessKey` is deleted. The check runs before a new key is created, so a refused `AccessKey` leaves no key on the backend that nobody can read.
+If a Secret of that name already exists and is not owned by the `AccessKey`, the operator leaves it untouched and reports `ERROR`. Taking it over would hand it to the `AccessKey`'s lifecycle, and Kubernetes would garbage-collect it — with whatever else it holds — when the `AccessKey` is deleted. The check runs before a key is created or adopted, so a refused `AccessKey` leaves no key on the backend that nobody can read, and its deletion leaves an existing key alone.
 
 Note the Secret does **not** carry the S3 endpoint; that lives on the `S3Connection`, and the connection currently records only the admin endpoint. A key added to the Secret by hand, such as the endpoint, is kept: the operator only compares and writes its own two keys.
 

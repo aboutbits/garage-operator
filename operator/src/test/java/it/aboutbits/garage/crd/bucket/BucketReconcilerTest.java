@@ -395,6 +395,32 @@ class BucketReconcilerTest {
         }
 
         @Test
+        @DisplayName("A Delete Bucket whose bucket is already gone from the backend should still be deletable")
+        void bucketGoneFromBackend_isReleased() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var bucket = given.one()
+                    .bucket()
+                    .withConnectionRef(connectionRef)
+                    .withBucketName("test-vanished-bucket")
+                    .withReclaimPolicy(ReclaimPolicy.DELETE)
+                    .returnFirst();
+
+            var bucketId = Objects.requireNonNull(
+                    awaitPhase(kubernetesClient, bucket, CRPhase.READY).getStatus().getBucketId()
+            );
+
+            garageAdminApi().deleteBucket(bucketId);
+
+            // when
+            TestUtil.deleteResource(kubernetesClient, Bucket.class);
+
+            // then
+            assertThat(bucketExists("test-vanished-bucket")).isFalse();
+        }
+
+        @Test
         @DisplayName("A Delete Bucket that still holds objects should be kept, and released once switched to Retain")
         void nonEmptyBucket_isKept() {
             // given

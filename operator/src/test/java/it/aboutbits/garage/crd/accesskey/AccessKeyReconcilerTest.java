@@ -584,6 +584,66 @@ class AccessKeyReconcilerTest {
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .until(() -> secret(secretName) == null);
         }
+
+        @Test
+        @DisplayName("An AccessKey whose key is already gone from the backend should still be deletable")
+        void keyGoneFromBackend_isReleased() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-vanished-key")
+                    .returnFirst();
+
+            var accessKeyId = Objects.requireNonNull(
+                    awaitPhase(kubernetesClient, accessKey, CRPhase.READY).getStatus().getAccessKeyId()
+            );
+
+            garageAdminApi().deleteKey(accessKeyId);
+
+            // when
+            TestUtil.deleteResource(kubernetesClient, AccessKey.class);
+
+            // then
+            // Only the recorded key: a reconcile caused by the new Secret can create the key again in the meantime.
+            assertThat(garageAdminApi().listKeys())
+                    .noneSatisfy(key -> assertThat(key.id()).isEqualTo(accessKeyId));
+        }
+
+        @Test
+        @DisplayName("An AccessKey that never reached the backend should be released even without its S3Connection")
+        void neverCreatedAccessKey_isReleasedWithoutConnection() {
+            // given
+            var connectionRef = new ResourceRef();
+
+            connectionRef.setNamespace(kubernetesClient.getNamespace());
+            connectionRef.setName("does-not-exist");
+
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-unborn-key")
+                    .returnFirst();
+
+            var pending = awaitPhase(kubernetesClient, accessKey, CRPhase.PENDING);
+
+            // precondition: with a recorded key, the cleanup would wait for the connection instead
+            assertThat(pending.getStatus().getAccessKeyId()).isNull();
+
+            var resource = kubernetesClient.resources(AccessKey.class)
+                    .inNamespace(accessKey.getMetadata().getNamespace())
+                    .withName(accessKey.getMetadata().getName());
+
+            // when
+            resource.delete();
+
+            // then
+            await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
+                    .pollInterval(500, TimeUnit.MILLISECONDS)
+                    .until(() -> resource.get() == null);
+        }
     }
 
     @Nested
@@ -726,6 +786,55 @@ class AccessKeyReconcilerTest {
             kubernetesClient.secrets()
                     .inNamespace(kubernetesClient.getNamespace())
                     .withName("test-foreign-secret")
+                    .delete();
+        }
+
+        @Test
+        @DisplayName("An existing key whose Secret name is taken by a foreign Secret should not be adopted, and survive the deletion")
+        void unownedSecretForExistingKey_isNotAdopted() {
+            // given
+            var connectionRef = given.readyConnection();
+
+            var existing = garageAdminApi().createKey(
+                    UpdateKeyRequestBody.named("test-foreign-existing-key")
+            );
+
+            kubernetesClient.secrets()
+                    .inNamespace(kubernetesClient.getNamespace())
+                    .resource(new SecretBuilder()
+                            .withNewMetadata()
+                            .withName("test-foreign-existing-secret")
+                            .endMetadata()
+                            .withType("Opaque")
+                            .addToStringData("unrelated", "value")
+                            .build()
+                    )
+                    .serverSideApply();
+
+            // when
+            var accessKey = given.one()
+                    .accessKey()
+                    .withConnectionRef(connectionRef)
+                    .withKeyName("test-foreign-existing-key")
+                    .withSecretName("test-foreign-existing-secret")
+                    .returnFirst();
+
+            // then
+            var refused = awaitPhase(kubernetesClient, accessKey, CRPhase.ERROR);
+
+            assertThat(refused.getStatus().getMessage()).contains("not owned by this resource");
+            assertThat(refused.getStatus().getAccessKeyId()).isNull();
+
+            // when
+            TestUtil.deleteResource(kubernetesClient, AccessKey.class);
+
+            // then
+            assertThat(garageAdminApi().listKeys())
+                    .anySatisfy(key -> assertThat(key.id()).isEqualTo(existing.accessKeyId()));
+
+            kubernetesClient.secrets()
+                    .inNamespace(kubernetesClient.getNamespace())
+                    .withName("test-foreign-existing-secret")
                     .delete();
         }
     }
