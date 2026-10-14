@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.api.model.Namespaced;
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.model.annotation.Group;
 import io.fabric8.kubernetes.model.annotation.Version;
+import it.aboutbits.garage.core.Constants;
 import it.aboutbits.garage.core.Named;
 import org.jspecify.annotations.NullMarked;
 
@@ -13,8 +14,8 @@ import java.util.stream.Collectors;
 
 /// Grants an [it.aboutbits.garage.crd.accesskey.AccessKey] permissions on a
 /// [it.aboutbits.garage.crd.bucket.Bucket]; on its own a key has no access to anything.
-@Version("v1")
-@Group("garage.aboutbits.it")
+@Version(Constants.CRD_VERSION)
+@Group(Constants.CRD_GROUP)
 @AdditionalPrinterColumn(
         name = "Name",
         jsonPath = ".status.name",

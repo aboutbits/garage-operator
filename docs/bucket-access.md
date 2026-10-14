@@ -10,8 +10,8 @@ This is Garage's native permission model — per key, per bucket, three flags. G
 apiVersion: garage.aboutbits.it/v1
 kind: BucketAccess
 metadata:
-  name: acme-app-uploads
   namespace: acme
+  name: acme-app-uploads
 spec:
   bucketRef:
     name: acme-uploads
@@ -24,13 +24,20 @@ spec:
 
 ## Spec
 
-| Field                    | Required | Description                                      |
-|--------------------------|----------|--------------------------------------------------|
-| `bucketRef.name`         | yes      | The `Bucket` resource. **Immutable.**            |
-| `bucketRef.namespace`    | no       | Defaults to the namespace of the `BucketAccess`. |
-| `accessKeyRef.name`      | yes      | The `AccessKey` resource. **Immutable.**         |
-| `accessKeyRef.namespace` | no       | Defaults to the namespace of the `BucketAccess`. |
-| `permissions`            | yes      | At least one of `read`, `write`, `owner`.        |
+| Field          | Type                                                 | Description                                                                                   | Required | Mutable |
+|----------------|------------------------------------------------------|-----------------------------------------------------------------------------------------------|----------|---------|
+| `bucketRef`    | [`ResourceRef`](#resourceref-bucketref-accesskeyref) | Reference to the `Bucket` resource.                                                           | Yes      | No      |
+| `accessKeyRef` | [`ResourceRef`](#resourceref-bucketref-accesskeyref) | Reference to the `AccessKey` resource. It must live on the same `S3Connection` as the bucket. | Yes      | No      |
+| `permissions`  | `array[string]`                                      | At least one of `read`, `write`, `owner`, see [Permissions](#permissions).                    | Yes      | Yes     |
+
+### ResourceRef (`bucketRef`, `accessKeyRef`)
+
+| Field       | Type     | Description                                                                            | Required |
+|-------------|----------|----------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the resource. If not specified, uses the namespace of the `BucketAccess`. | No       |
+| `name`      | `string` | Name of the resource.                                                                  | Yes      |
+
+A change to a `Mutable` field is applied at the next reconcile.
 
 The references point at the **Kubernetes resources**, not at backend names, so a grant waits for both to be `READY` and needs no knowledge of backend identifiers.
 

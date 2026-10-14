@@ -162,8 +162,8 @@ The following example sets up a Garage installed with the AboutBits Helm chart a
 apiVersion: garage.aboutbits.it/v1
 kind: GarageCluster
 metadata:
-  name: acme
   namespace: acme
+  name: acme
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
@@ -179,8 +179,8 @@ spec:
 apiVersion: garage.aboutbits.it/v1
 kind: S3Connection
 metadata:
-  name: acme
   namespace: acme
+  name: acme
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
@@ -192,8 +192,8 @@ spec:
 apiVersion: garage.aboutbits.it/v1
 kind: Bucket
 metadata:
-  name: acme-uploads
   namespace: acme
+  name: acme-uploads
 spec:
   connectionRef:
     name: acme
@@ -207,8 +207,8 @@ spec:
 apiVersion: garage.aboutbits.it/v1
 kind: AccessKey
 metadata:
-  name: acme-app
   namespace: acme
+  name: acme-app
 spec:
   connectionRef:
     name: acme
@@ -220,8 +220,8 @@ spec:
 apiVersion: garage.aboutbits.it/v1
 kind: BucketAccess
 metadata:
-  name: acme-app-uploads
   namespace: acme
+  name: acme-app-uploads
 spec:
   bucketRef:
     name: acme-uploads

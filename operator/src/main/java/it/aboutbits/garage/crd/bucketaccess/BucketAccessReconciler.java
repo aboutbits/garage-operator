@@ -18,6 +18,7 @@ import io.quarkiverse.operatorsdk.annotations.AdditionalRBACRules;
 import io.quarkiverse.operatorsdk.annotations.RBACRule;
 import it.aboutbits.garage.core.BaseReconciler;
 import it.aboutbits.garage.core.CRPhase;
+import it.aboutbits.garage.core.Constants;
 import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.core.adminapi.GarageService;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
@@ -40,7 +41,7 @@ import java.util.stream.Collectors;
                 verbs = {"get", "list", "watch"}
         ),
         @RBACRule(
-                apiGroups = {"garage.aboutbits.it"},
+                apiGroups = {Constants.CRD_GROUP},
                 resources = {"buckets", "accesskeys"},
                 verbs = {"get", "list", "watch"}
         ),
@@ -189,7 +190,7 @@ public class BucketAccessReconciler
 
         if (!bucketAccessService.sameResource(bucketConnectionRef, accessKeyConnectionRef)) {
             status.updatePhase(CRPhase.ERROR)
-                    .setMessage("The Bucket and the AccessKey live on different S3Connections [bucket.connection=%s/%s, accessKey.connection=%s/%s]".formatted(
+                    .setMessage("The Bucket and the AccessKey live on different S3Connections [bucketConnectionRef=%s/%s, accessKeyConnectionRef=%s/%s]".formatted(
                             bucketConnectionRef.getNamespace(),
                             bucketConnectionRef.getName(),
                             accessKeyConnectionRef.getNamespace(),
@@ -276,7 +277,7 @@ public class BucketAccessReconciler
             if (isNamespaceTerminating(kubernetesClient, resource)) {
                 // Release without backend cleanup, otherwise the namespace deletion hangs forever.
                 log.warn(
-                        "The namespace is being deleted and the S3Connection is gone, releasing the BucketAccess without revoking the grant on the backend [resource={}/{}, bucket.id={}, accessKey.id={}]",
+                        "The namespace is being deleted and the S3Connection is gone, releasing the BucketAccess without revoking the grant on the backend [resource={}/{}, bucketId={}, accessKeyId={}]",
                         namespace,
                         name,
                         bucketId,
@@ -358,7 +359,7 @@ public class BucketAccessReconciler
 
             if (!currentPermissions.equals(desiredPermissions)) {
                 log.info(
-                        "Updating BucketAccess permissions [resource={}/{}, bucket.id={}, accessKey.id={}]",
+                        "Updating BucketAccess permissions [resource={}/{}, bucketId={}, accessKeyId={}]",
                         resource.getMetadata().getNamespace(),
                         resource.getMetadata().getName(),
                         bucketId,
@@ -433,7 +434,7 @@ public class BucketAccessReconciler
         var previousConnection = previousConnectionOptional.get();
 
         log.info(
-                "Revoking the previous grant, the references now resolve to different backend objects [resource={}/{}, previous.bucket.id={}, previous.accessKey.id={}]",
+                "Revoking the previous grant, the references now resolve to different backend objects [resource={}/{}, previousBucketId={}, previousAccessKeyId={}]",
                 resource.getMetadata().getNamespace(),
                 resource.getMetadata().getName(),
                 previousBucketId,
