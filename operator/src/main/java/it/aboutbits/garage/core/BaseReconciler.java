@@ -2,6 +2,8 @@ package it.aboutbits.garage.core;
 
 import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import it.aboutbits.garage.crd.s3connection.S3Connection;
 import lombok.extern.slf4j.Slf4j;
@@ -119,6 +121,20 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         return Optional.of(s3Connection);
     }
 
+    /// During namespace deletion the backend, its Secret and the [S3Connection] disappear at once,
+    /// so cleanup waiting for them would block the namespace in `Terminating` forever.
+    public boolean isNamespaceTerminating(
+            KubernetesClient kubernetesClient,
+            CR resource
+    ) {
+        var namespace = kubernetesClient.namespaces()
+                .withName(resource.getMetadata().getNamespace())
+                .get();
+
+        //noinspection ConstantConditions
+        return namespace == null || namespace.getMetadata().getDeletionTimestamp() != null;
+    }
+
     public <E extends Exception> UpdateControl<CR> handleError(
             CR resource,
             S status,
@@ -135,6 +151,20 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
                 .setMessage(exception.getMessage());
 
         return UpdateControl.patchStatus(resource)
+                .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
+    }
+
+    protected DeleteControl failCleanup(
+            CR resource,
+            S status,
+            Context<CR> context,
+            String message
+    ) {
+        status.setMessage(message);
+
+        context.getClient().resource(resource).patchStatus();
+
+        return DeleteControl.noFinalizerRemoval()
                 .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
     }
 }
