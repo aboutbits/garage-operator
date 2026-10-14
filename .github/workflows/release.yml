@@ -39,6 +39,8 @@ jobs:
       - name: Increment version
         # verifyRelease of the axion-release plugin resolves the configurations of the operator project from the
         # root project, which a parallel build refuses with "attempted without an exclusive lock".
+        # TODO Remove --no-parallel once verifyRelease passes in a parallel build. It still fails with Quarkus 3.39.5
+        #  and the axion-release plugin 1.21.4.
         run: ./gradlew --console=colored --no-parallel createRelease -Prelease.versionIncrementer=increment${{ github.event.inputs.increment }}
         shell: bash
       - name: Get next package version
