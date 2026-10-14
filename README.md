@@ -12,6 +12,8 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 | **Kubernetes** | 1.34+                                     |
 
 > **Note:** Kubernetes 1.34+ is required. The tests run against K3s 1.34, and older Kubernetes versions are end-of-life. The Helm chart refuses to install on an older cluster.
+>
+> **Note:** A [`GarageCluster`](docs/garage-cluster.md) needs Garage installed with the chart value `garage.singleNode: false`. With the default `--single-node`, Garage creates its layout itself and does not start again once the operator has applied a newer one. Without a `GarageCluster`, keep the default.
 
 ## Contribute
 
@@ -62,7 +64,7 @@ git config core.hooksPath .githooks
 
 ### Development
 
-You can run the operator in dev mode, against a throwaway K3s cluster, using:
+You can run the operator in dev mode, against a throwaway K3s cluster and a real Garage node, using:
 
 ```bash
 make run
@@ -81,6 +83,8 @@ make test
 
 ./gradlew :operator:test
 ```
+
+The tests are `@QuarkusTest` integration tests against real infrastructure provided by Quarkus Dev Services: a K3s cluster with the CRDs applied, and a Garage node started from `operator/src/main/docker/compose-devservices.yml`. The Garage image there is pinned to the version the Helm chart deploys, so the Admin API contract is exercised against the real thing.
 
 ## Information
 
