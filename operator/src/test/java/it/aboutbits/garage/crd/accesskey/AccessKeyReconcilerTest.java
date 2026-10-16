@@ -14,7 +14,7 @@ import it.aboutbits.garage.core.adminapi.GarageAdminApi;
 import it.aboutbits.garage.core.adminapi.GarageAdminClientFactory;
 import it.aboutbits.garage.core.KubernetesService;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -613,7 +613,7 @@ class AccessKeyReconcilerTest {
         }
 
         @Test
-        @DisplayName("An AccessKey that never reached the backend should be released even without its S3Connection")
+        @DisplayName("An AccessKey that never reached the backend should be released even without its GarageClusterConnection")
         void neverCreatedAccessKey_isReleasedWithoutConnection() {
             // given
             var connectionRef = new ResourceRef();
@@ -1054,7 +1054,7 @@ class AccessKeyReconcilerTest {
     @Nested
     class Teardown {
         @Test
-        @DisplayName("Deleting a namespace whose S3Connection is already gone should not be blocked by its AccessKeys")
+        @DisplayName("Deleting a namespace whose GarageClusterConnection is already gone should not be blocked by its AccessKeys")
         void namespaceDeletion_isNotBlocked() {
             // given
             var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
@@ -1082,7 +1082,7 @@ class AccessKeyReconcilerTest {
             // when
             // What namespace deletion does to a Garage installed in that namespace: the
             // connection goes away, independently of anything that depends on it.
-            kubernetesClient.resources(S3Connection.class)
+            kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(namespace)
                     .withName(connectionRef.getName())
                     .delete();
@@ -1102,7 +1102,7 @@ class AccessKeyReconcilerTest {
         }
 
         @Test
-        @DisplayName("An AccessKey whose S3Connection is gone should wait for it, and delete the key once it is back")
+        @DisplayName("An AccessKey whose GarageClusterConnection is gone should wait for it, and delete the key once it is back")
         void lostConnection_blocksDeletionUntilBack() {
             // given
             var connectionRef = given.readyConnection();
@@ -1117,15 +1117,15 @@ class AccessKeyReconcilerTest {
                     awaitPhase(kubernetesClient, accessKey, CRPhase.READY).getStatus().getAccessKeyId()
             );
 
-            var s3Connection = kubernetesClient.resources(S3Connection.class)
+            var garageClusterConnection = kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName());
 
-            s3Connection.delete();
+            garageClusterConnection.delete();
 
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .until(() -> s3Connection.get() == null);
+                    .until(() -> garageClusterConnection.get() == null);
 
             var resource = kubernetesClient.resources(AccessKey.class)
                     .inNamespace(accessKey.getMetadata().getNamespace())
@@ -1151,13 +1151,13 @@ class AccessKeyReconcilerTest {
 
             // when
             given.one()
-                    .s3Connection()
+                    .garageClusterConnection()
                     .withNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName())
                     .returnFirst();
 
             // then
-            // The AccessKey does not watch its S3Connection, so only the retry of the cleanup notices it.
+            // The AccessKey does not watch its GarageClusterConnection, so only the retry of the cleanup notices it.
             await().atMost(RETRY_SECONDS + AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .until(() -> resource.get() == null);
@@ -1182,7 +1182,7 @@ class AccessKeyReconcilerTest {
     @Nested
     class Gating {
         @Test
-        @DisplayName("An AccessKey referencing an unknown S3Connection should stay pending")
+        @DisplayName("An AccessKey referencing an unknown GarageClusterConnection should stay pending")
         void unknownConnection_staysPending() {
             // given
             given.appliedLayout();

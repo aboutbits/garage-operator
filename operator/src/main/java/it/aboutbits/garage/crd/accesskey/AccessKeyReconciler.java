@@ -22,7 +22,7 @@ import it.aboutbits.garage.core.KubernetesService;
 import it.aboutbits.garage.core.adminapi.AccessKeyInfo;
 import it.aboutbits.garage.core.adminapi.AccessKeyPermissions;
 import it.aboutbits.garage.core.adminapi.GarageService;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
@@ -108,15 +108,15 @@ public class AccessKeyReconciler
 
         var connectionRef = spec.getConnectionRef();
 
-        var s3ConnectionOptional = getReferencedS3Connection(
+        var garageClusterConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 connectionRef
         );
 
-        if (s3ConnectionOptional.isEmpty()) {
+        if (garageClusterConnectionOptional.isEmpty()) {
             status.updatePhase(CRPhase.PENDING)
-                    .setMessage("The specified S3Connection does not exist or is not ready yet [spec.connectionRef=%s/%s]".formatted(
+                    .setMessage("The specified GarageClusterConnection does not exist or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     ));
@@ -125,11 +125,11 @@ public class AccessKeyReconciler
                     .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
         }
 
-        var s3Connection = s3ConnectionOptional.get();
+        var garageClusterConnection = garageClusterConnectionOptional.get();
 
         try {
             return reconcile(
-                    s3Connection,
+                    garageClusterConnection,
                     resource,
                     status
             );
@@ -171,7 +171,7 @@ public class AccessKeyReconciler
                     .rescheduleAfter(100, TimeUnit.MILLISECONDS);
         }
 
-        // Never reached the backend: delete directly, even if the S3Connection is missing.
+        // Never reached the backend: delete directly, even if the GarageClusterConnection is missing.
         var accessKeyId = status.getAccessKeyId();
 
         if (accessKeyId == null) {
@@ -186,17 +186,17 @@ public class AccessKeyReconciler
 
         var connectionRef = spec.getConnectionRef();
 
-        var s3ConnectionOptional = getReferencedS3Connection(
+        var garageClusterConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 connectionRef
         );
 
-        if (s3ConnectionOptional.isEmpty()) {
+        if (garageClusterConnectionOptional.isEmpty()) {
             if (isNamespaceTerminating(kubernetesClient, resource)) {
                 // Release without backend cleanup, otherwise the namespace deletion hangs forever.
                 log.warn(
-                        "The namespace is being deleted and the S3Connection is gone, releasing the AccessKey without deleting the key on the backend [resource={}/{}, accessKeyId={}]",
+                        "The namespace is being deleted and the GarageClusterConnection is gone, releasing the AccessKey without deleting the key on the backend [resource={}/{}, accessKeyId={}]",
                         namespace,
                         name,
                         accessKeyId
@@ -209,18 +209,18 @@ public class AccessKeyReconciler
                     resource,
                     status,
                     context,
-                    "The specified S3Connection no longer exists or is not ready yet [spec.connectionRef=%s/%s]".formatted(
+                    "The specified GarageClusterConnection no longer exists or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     )
             );
         }
 
-        var s3Connection = s3ConnectionOptional.get();
+        var garageClusterConnection = garageClusterConnectionOptional.get();
 
         try {
             // By recorded id, never by name: key names are not unique.
-            var accessKeyOptional = garageService.getAccessKey(s3Connection, accessKeyId);
+            var accessKeyOptional = garageService.getAccessKey(garageClusterConnection, accessKeyId);
 
             if (accessKeyOptional.isEmpty()) {
                 log.info(
@@ -234,7 +234,7 @@ public class AccessKeyReconciler
             }
 
             garageService.deleteAccessKey(
-                    s3Connection,
+                    garageClusterConnection,
                     accessKeyId
             );
 
@@ -264,7 +264,7 @@ public class AccessKeyReconciler
     }
 
     private UpdateControl<AccessKey> reconcile(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             AccessKey resource,
             AccessKeyStatus status
     ) {
@@ -276,7 +276,7 @@ public class AccessKeyReconciler
         var desiredPermissions = new AccessKeyPermissions(spec.isAllowCreateBucket());
 
         var accessKeyOptional = findManagedAccessKey(
-                s3Connection,
+                garageClusterConnection,
                 resource,
                 status
         );
@@ -303,7 +303,7 @@ public class AccessKeyReconciler
             );
 
             accessKey = garageService.createAccessKey(
-                    s3Connection,
+                    garageClusterConnection,
                     spec.getName(),
                     desiredPermissions
             );
@@ -327,7 +327,7 @@ public class AccessKeyReconciler
             );
 
             accessKey = garageService.updateAccessKeyPermissions(
-                    s3Connection,
+                    garageClusterConnection,
                     accessKey.accessKeyId(),
                     desiredPermissions
             );
@@ -352,14 +352,14 @@ public class AccessKeyReconciler
     /// After the first bind the key is addressed by its recorded id; the name is only used to
     /// discover (or adopt) it the first time, or again if the recorded key was deleted.
     private Optional<AccessKeyInfo> findManagedAccessKey(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             AccessKey resource,
             AccessKeyStatus status
     ) {
         var recordedAccessKeyId = status.getAccessKeyId();
 
         if (recordedAccessKeyId != null) {
-            var recorded = garageService.getAccessKey(s3Connection, recordedAccessKeyId);
+            var recorded = garageService.getAccessKey(garageClusterConnection, recordedAccessKeyId);
 
             if (recorded.isPresent()) {
                 return recorded;
@@ -373,7 +373,7 @@ public class AccessKeyReconciler
             );
         }
 
-        var found = garageService.findAccessKey(s3Connection, resource.getSpec().getName());
+        var found = garageService.findAccessKey(garageClusterConnection, resource.getSpec().getName());
 
         found.ifPresent(accessKey -> requireNotManagedElsewhere(resource, accessKey.accessKeyId()));
 

@@ -17,7 +17,7 @@ public class BucketSpec {
     @Required
     @ValidationRule(
             value = "self == oldSelf",
-            message = "The connectionRef is immutable. Delete and recreate the Bucket to move it to a different S3Connection."
+            message = "The connectionRef is immutable. Delete and recreate the Bucket to move it to a different GarageClusterConnection."
     )
     private ResourceRef connectionRef = new ResourceRef();
 

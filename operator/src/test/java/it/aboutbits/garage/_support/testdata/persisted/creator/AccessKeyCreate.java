@@ -117,14 +117,14 @@ public class AccessKeyCreate extends TestDataCreator<AccessKey> {
             return withConnectionRef;
         }
 
-        var s3Connection = given.one()
-                .s3Connection()
+        var garageClusterConnection = given.one()
+                .garageClusterConnection()
                 .returnFirst();
 
         var connectionRef = new ResourceRef();
 
-        connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
-        connectionRef.setName(s3Connection.getMetadata().getName());
+        connectionRef.setNamespace(garageClusterConnection.getMetadata().getNamespace());
+        connectionRef.setName(garageClusterConnection.getMetadata().getName());
 
         withConnectionRef = connectionRef;
 

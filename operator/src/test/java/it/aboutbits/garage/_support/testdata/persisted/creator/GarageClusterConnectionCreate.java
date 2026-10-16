@@ -5,8 +5,8 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import it.aboutbits.garage._support.testdata.base.TestDataCreator;
 import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.SecretKeyRef;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
-import it.aboutbits.garage.crd.s3connection.S3ConnectionSpec;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnectionSpec;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @Setter
 @Accessors(fluent = true, chain = true)
 @NullMarked
-public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
+public class GarageClusterConnectionCreate extends TestDataCreator<GarageClusterConnection> {
     private final Given given;
 
     private final KubernetesClient kubernetesClient;
@@ -31,7 +31,7 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
 
     private @Nullable SecretKeyRef withAdminSecretRef;
 
-    public S3ConnectionCreate(
+    public GarageClusterConnectionCreate(
             int numberOfItems,
             Given given,
             KubernetesClient kubernetesClient,
@@ -44,11 +44,11 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
     }
 
     @Override
-    protected S3Connection create(int index) {
+    protected GarageClusterConnection create(int index) {
         var namespace = getNamespace();
         var name = getName();
 
-        var item = new S3Connection();
+        var item = new GarageClusterConnection();
 
         item.setMetadata(new ObjectMetaBuilder()
                 .withNamespace(namespace)
@@ -56,24 +56,24 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
                 .build()
         );
 
-        var spec = new S3ConnectionSpec();
+        var spec = new GarageClusterConnectionSpec();
 
         spec.setAdminEndpoint(getAdminEndpoint());
         spec.setAdminSecretRef(getAdminSecretRef());
 
         item.setSpec(spec);
 
-        kubernetesClient.resources(S3Connection.class)
+        kubernetesClient.resources(GarageClusterConnection.class)
                 .inNamespace(namespace)
                 .resource(item)
                 .serverSideApply();
 
         //noinspection ConstantConditions
-        return kubernetesClient.resources(S3Connection.class)
+        return kubernetesClient.resources(GarageClusterConnection.class)
                 .inNamespace(namespace)
                 .withName(name)
                 .waitUntilCondition(
-                        s3Connection -> s3Connection != null && s3Connection.getStatus() != null,
+                        garageClusterConnection -> garageClusterConnection != null && garageClusterConnection.getStatus() != null,
                         30,
                         TimeUnit.SECONDS
                 );
@@ -94,7 +94,7 @@ public class S3ConnectionCreate extends TestDataCreator<S3Connection> {
             return withName;
         }
 
-        withName = randomKubernetesNameSuffix("test-s3-connection");
+        withName = randomKubernetesNameSuffix("test-garage-cluster-connection");
 
         return withName;
     }

@@ -15,7 +15,7 @@ import it.aboutbits.garage.core.adminapi.dto.ApiBucketKeyPerm;
 import it.aboutbits.garage.core.adminapi.dto.BucketKeyPermChangeRequest;
 import it.aboutbits.garage.core.adminapi.dto.CreateBucketRequest;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -494,7 +494,7 @@ class BucketReconcilerTest {
         }
 
         @Test
-        @DisplayName("A Delete Bucket whose S3Connection is gone should wait for it, and delete the bucket once it is back")
+        @DisplayName("A Delete Bucket whose GarageClusterConnection is gone should wait for it, and delete the bucket once it is back")
         void lostConnection_blocksDeletionUntilBack() {
             // given
             var connectionRef = given.readyConnection();
@@ -508,15 +508,15 @@ class BucketReconcilerTest {
 
             awaitPhase(kubernetesClient, bucket, CRPhase.READY);
 
-            var s3Connection = kubernetesClient.resources(S3Connection.class)
+            var garageClusterConnection = kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName());
 
-            s3Connection.delete();
+            garageClusterConnection.delete();
 
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .until(() -> s3Connection.get() == null);
+                    .until(() -> garageClusterConnection.get() == null);
 
             var resource = kubernetesClient.resources(Bucket.class)
                     .inNamespace(bucket.getMetadata().getNamespace())
@@ -541,13 +541,13 @@ class BucketReconcilerTest {
 
             // when
             given.one()
-                    .s3Connection()
+                    .garageClusterConnection()
                     .withNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName())
                     .returnFirst();
 
             // then
-            // The Bucket does not watch its S3Connection, so only the retry of the cleanup notices it.
+            // The Bucket does not watch its GarageClusterConnection, so only the retry of the cleanup notices it.
             await().atMost(RETRY_SECONDS + AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .until(() -> resource.get() == null);
@@ -556,7 +556,7 @@ class BucketReconcilerTest {
         }
 
         @Test
-        @DisplayName("A Delete Bucket that never reached the backend should be released even without its S3Connection")
+        @DisplayName("A Delete Bucket that never reached the backend should be released even without its GarageClusterConnection")
         void neverCreatedBucket_isReleasedWithoutConnection() {
             // given
             var connectionRef = new ResourceRef();
@@ -593,7 +593,7 @@ class BucketReconcilerTest {
     @Nested
     class Teardown {
         @Test
-        @DisplayName("Deleting a namespace whose S3Connection is already gone should not be blocked by its Buckets")
+        @DisplayName("Deleting a namespace whose GarageClusterConnection is already gone should not be blocked by its Buckets")
         void namespaceDeletion_isNotBlocked() {
             // given
             var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
@@ -622,7 +622,7 @@ class BucketReconcilerTest {
             // when
             // What namespace deletion does to a Garage installed in that namespace: the
             // connection goes away, independently of anything that depends on it.
-            kubernetesClient.resources(S3Connection.class)
+            kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(namespace)
                     .withName(connectionRef.getName())
                     .delete();
@@ -644,7 +644,7 @@ class BucketReconcilerTest {
     @Nested
     class Gating {
         @Test
-        @DisplayName("A Bucket referencing an unknown S3Connection should stay pending")
+        @DisplayName("A Bucket referencing an unknown GarageClusterConnection should stay pending")
         void unknownConnection_staysPending() {
             // given
             given.appliedLayout();
@@ -669,7 +669,7 @@ class BucketReconcilerTest {
         }
 
         @Test
-        @DisplayName("A Bucket referencing a failed S3Connection should stay pending")
+        @DisplayName("A Bucket referencing a failed GarageClusterConnection should stay pending")
         void failedConnection_staysPending() {
             // given
             given.appliedLayout();
@@ -679,15 +679,15 @@ class BucketReconcilerTest {
                     .withToken("definitely-not-the-admin-token")
                     .returnFirst();
 
-            var s3Connection = given.one()
-                    .s3Connection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             //noinspection ConstantConditions
-            kubernetesClient.resources(S3Connection.class)
-                    .inNamespace(s3Connection.getMetadata().getNamespace())
-                    .withName(s3Connection.getMetadata().getName())
+            kubernetesClient.resources(GarageClusterConnection.class)
+                    .inNamespace(garageClusterConnection.getMetadata().getNamespace())
+                    .withName(garageClusterConnection.getMetadata().getName())
                     .waitUntilCondition(
                             item -> item != null
                                     && item.getStatus() != null
@@ -698,8 +698,8 @@ class BucketReconcilerTest {
 
             var connectionRef = new ResourceRef();
 
-            connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
-            connectionRef.setName(s3Connection.getMetadata().getName());
+            connectionRef.setNamespace(garageClusterConnection.getMetadata().getNamespace());
+            connectionRef.setName(garageClusterConnection.getMetadata().getName());
 
             // when
             var bucket = given.one()
@@ -715,24 +715,24 @@ class BucketReconcilerTest {
         }
 
         @Test
-        @DisplayName("A Bucket referencing an S3Connection that is READY for an older generation should stay pending")
+        @DisplayName("A Bucket referencing a GarageClusterConnection that is READY for an older generation should stay pending")
         void staleConnection_staysPending() {
             // given
             var connectionRef = given.readyConnection();
 
-            var s3Connection = kubernetesClient.resources(S3Connection.class)
+            var garageClusterConnection = kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName());
 
             // What a Bucket sees between an edit of the connection and the probe of the new spec.
             // A status change does not bump the generation, so the operator leaves this patch alone.
-            s3Connection.editStatus(item -> {
+            garageClusterConnection.editStatus(item -> {
                 item.getStatus().setObservedGeneration(item.getMetadata().getGeneration() - 1);
 
                 return item;
             });
 
-            var stale = Objects.requireNonNull(s3Connection.get());
+            var stale = Objects.requireNonNull(garageClusterConnection.get());
 
             // precondition: a connection that is not READY keeps the Bucket pending too, which would prove nothing
             assertThat(stale.getStatus().getPhase()).isEqualTo(CRPhase.READY);

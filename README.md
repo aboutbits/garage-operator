@@ -18,28 +18,28 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 ## Architecture
 
 ```text
-┌───────────────────────────────────────────────────────────────────────────┐
-│                            Kubernetes Cluster                             │
-│  ┌─────────────────────────┐   ┌────────────────────────────────────────┐ │
-│  │ Garage Operator CRDs    │──▶│            Garage Operator             │ │
-│  │                         │   │  ┌──────────────────────────────────┐  │ │
-│  │ ┌─────────────────────┐ │   │  │     GarageCluster Controller     │  │ │
-│  │ │ GarageCluster       │ │   │  ├──────────────────────────────────┤  │ │
-│  │ │ S3Connection        │ │   │  │      S3Connection Controller     │  │ │
-│  │ └─────────▲───────────┘ │   │  ├──────────────────────────────────┤  │ │
-│  │           │             │   │  │         Bucket Controller        │  │ │
-│  │ ┌─────────┴───────────┐ │   │  ├──────────────────────────────────┤  │ │
-│  │ │ - Bucket            │ │   │  │       AccessKey Controller       │  │ │
-│  │ │ - AccessKey         │ │   │  ├──────────────────────────────────┤  │ │
-│  │ │ - BucketAccess      │ │   │  │      BucketAccess Controller     │  │ │
-│  │ └─────────────────────┘ │   │  └──────────────────────────────────┘  │ │
-│  └─────────────────────────┘   └───────────────────┬────────────────────┘ │
-│                                                    │                      │
-│                                  ┌─────────────────▼─────────────────┐    │
-│                                  │  Garage (AboutBits Helm chart)    │    │
-│                                  │  Admin API :3903 · S3 API :3900   │    │
-│                                  └───────────────────────────────────┘    │
-└───────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────────┐
+│                                 Kubernetes Cluster                                │
+│  ┌─────────────────────────────┐   ┌────────────────────────────────────────────┐ │
+│  │ Garage Operator CRDs        │──▶│              Garage Operator               │ │
+│  │                             │   │  ┌──────────────────────────────────────┐  │ │
+│  │ ┌─────────────────────────┐ │   │  │       GarageCluster Controller       │  │ │
+│  │ │ GarageCluster           │ │   │  ├──────────────────────────────────────┤  │ │
+│  │ │ GarageClusterConnection │ │   │  │  GarageClusterConnection Controller  │  │ │
+│  │ └─────────▲───────────────┘ │   │  ├──────────────────────────────────────┤  │ │
+│  │           │                 │   │  │          Bucket Controller           │  │ │
+│  │ ┌─────────┴───────────────┐ │   │  ├──────────────────────────────────────┤  │ │
+│  │ │ - Bucket                │ │   │  │         AccessKey Controller         │  │ │
+│  │ │ - AccessKey             │ │   │  ├──────────────────────────────────────┤  │ │
+│  │ │ - BucketAccess          │ │   │  │       BucketAccess Controller        │  │ │
+│  │ └─────────────────────────┘ │   │  └──────────────────────────────────────┘  │ │
+│  └─────────────────────────────┘   └─────────────────────┬──────────────────────┘ │
+│                                                          │                        │
+│                                        ┌─────────────────▼─────────────────┐      │
+│                                        │  Garage (AboutBits Helm chart)    │      │
+│                                        │  Admin API :3903 · S3 API :3900   │      │
+│                                        └───────────────────────────────────┘      │
+└───────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 The operator talks to Garage only through its [Admin API v2](https://garagehq.deuxfleurs.fr/documentation/reference-manual/admin-api/). The S3 API cannot do this job: it has no notion of access keys, and Garage implements neither IAM nor bucket policies — its permissions are per key and per bucket, and only reachable through the Admin API.
@@ -84,14 +84,14 @@ The chart ships a `README.md` and a `values.schema.json` with the complete list.
 
 #### Watching selected namespaces
 
-By default, every controller watches all namespaces. To restrict the operator to some of them, set the same comma-separated list for all five controllers — `GARAGECLUSTERRECONCILER`, `S3CONNECTIONRECONCILER`,
+By default, every controller watches all namespaces. To restrict the operator to some of them, set the same comma-separated list for all five controllers — `GARAGECLUSTERRECONCILER`, `GARAGECLUSTERCONNECTIONRECONCILER`,
 `BUCKETRECONCILER`, `ACCESSKEYRECONCILER` and `BUCKETACCESSRECONCILER`:
 
 ```yaml
 app:
   envs:
     QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGECLUSTERRECONCILER_NAMESPACES: acme,globex
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_S3CONNECTIONRECONCILER_NAMESPACES: acme,globex
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGECLUSTERCONNECTIONRECONCILER_NAMESPACES: acme,globex
     QUARKUS_OPERATOR_SDK_CONTROLLERS_BUCKETRECONCILER_NAMESPACES: acme,globex
     QUARKUS_OPERATOR_SDK_CONTROLLERS_ACCESSKEYRECONCILER_NAMESPACES: acme,globex
     QUARKUS_OPERATOR_SDK_CONTROLLERS_BUCKETACCESSRECONCILER_NAMESPACES: acme,globex
@@ -108,7 +108,7 @@ The RBAC the chart installs stays cluster-wide either way.
 # The release you are upgrading to.
 VERSION=0.1.0
 
-for crd in garageclusters s3connections buckets accesskeys bucketaccesses; do
+for crd in garageclusters garageclusterconnections buckets accesskeys bucketaccesses; do
   kubectl apply --server-side --force-conflicts \
     -f "https://github.com/aboutbits/garage-operator/releases/download/v${VERSION}/${crd}.garage.aboutbits.it-v1.yml"
 done
@@ -125,8 +125,8 @@ The operator Deployment uses the `Recreate` strategy, so there is a short gap wi
 
 The reasons:
 
-- The operator reads Secrets with its own, cluster-wide permissions. An `S3Connection` or `GarageCluster` may reference a Secret in any namespace and names the endpoint the token is sent to. Whoever can create one can therefore make the operator read a Secret they cannot read themselves and send it to an endpoint of their choice.
-- References may cross namespaces. A `BucketAccess` can grant a key access to a `Bucket` in another namespace, and a `Bucket` or `AccessKey` can use the `S3Connection` of another namespace. That is useful for a central Garage, and unsafe in the hands of tenants.
+- The operator reads Secrets with its own, cluster-wide permissions. A `GarageClusterConnection` or `GarageCluster` may reference a Secret in any namespace and names the endpoint the token is sent to. Whoever can create one can therefore make the operator read a Secret they cannot read themselves and send it to an endpoint of their choice.
+- References may cross namespaces. A `BucketAccess` can grant a key access to a `Bucket` in another namespace, and a `Bucket` or `AccessKey` can use the `GarageClusterConnection` of another namespace. That is useful for a central Garage, and unsafe in the hands of tenants.
 
 What the operator itself is allowed to do:
 
@@ -145,7 +145,7 @@ The Garage Admin API is plain HTTP inside the cluster by default, so the admin t
 Further documentation of each Custom Resource can be found here:
 
 - [GarageCluster](docs/garage-cluster.md) – Bootstrap and converge the cluster layout of a Garage installation.
-- [S3Connection](docs/s3-connection.md) – Define the backend everything else lives on.
+- [GarageClusterConnection](docs/garage-cluster-connection.md) – Define the backend everything else lives on.
 - [Bucket](docs/bucket.md) – Manage buckets, their quotas and what happens when they are deleted.
 - [AccessKey](docs/access-key.md) – Manage access keys, with their credentials written to a Secret.
 - [BucketAccess](docs/bucket-access.md) – Grant an access key `read`, `write` or `owner` on a bucket.
@@ -177,7 +177,7 @@ spec:
 # Define the backend that buckets and keys live on. It becomes READY once the layout is applied.
 ---
 apiVersion: garage.aboutbits.it/v1
-kind: S3Connection
+kind: GarageClusterConnection
 metadata:
   namespace: acme
   name: acme
@@ -255,35 +255,35 @@ Garage addresses buckets by path, so clients need path-style access enabled (`fo
 Every resource reports a `phase` and a `message`, which `kubectl get` shows as columns:
 
 ```bash
-kubectl get garageclusters,s3connections,buckets,accesskeys,bucketaccesses --all-namespaces
+kubectl get garageclusters,garageclusterconnections,buckets,accesskeys,bucketaccesses --all-namespaces
 ```
 
-| Phase      | Meaning                                                                                              |
-|------------|------------------------------------------------------------------------------------------------------|
-| `PENDING`  | Waiting for something it depends on, for example an `S3Connection` that is not `READY` yet. Retried. |
-| `READY`    | In sync with the backend.                                                                            |
-| `ERROR`    | Something needs attention; the `message` says what. Retried, usually every minute.                   |
-| `DELETING` | Cleanup on the backend is in progress, or blocked — again, see the `message`.                        |
+| Phase      | Meaning                                                                                                        |
+|------------|----------------------------------------------------------------------------------------------------------------|
+| `PENDING`  | Waiting for something it depends on, for example a `GarageClusterConnection` that is not `READY` yet. Retried. |
+| `READY`    | In sync with the backend.                                                                                      |
+| `ERROR`    | Something needs attention; the `message` says what. Retried, usually every minute.                             |
+| `DELETING` | Cleanup on the backend is in progress, or blocked — again, see the `message`.                                  |
 
 Resources depend on each other in this order, and each one waits for the one before it to be `READY`:
-`GarageCluster` → `S3Connection` → `Bucket` and `AccessKey` → `BucketAccess`. Everything can be applied at once; it settles on its own.
+`GarageCluster` → `GarageClusterConnection` → `Bucket` and `AccessKey` → `BucketAccess`. Everything can be applied at once; it settles on its own.
 
 ### Drift
 
 The operator reconciles every resource at least every 10 minutes, even when nothing changed in Kubernetes. A bucket or key deleted by hand in Garage is recreated, changed quotas or permissions are put back, and an
-`S3Connection` whose backend went down leaves `READY`.
+`GarageClusterConnection` whose backend went down leaves `READY`.
 
 The credentials Secret of an `AccessKey` is watched directly: deleted or edited, it is written again within seconds, with the same credentials.
 
 ### Deleting resources
 
-| Resource        | Deleting it                                                                                        |
-|-----------------|----------------------------------------------------------------------------------------------------|
-| `GarageCluster` | Only removes the operator's record of the cluster. The layout and the data stay.                   |
-| `S3Connection`  | Removes the connection. Delete it **last**: deleting the resources on it needs it.                 |
-| `Bucket`        | `Retain` (default) keeps the bucket. `Delete` deletes it — but never one that still holds objects. |
-| `AccessKey`     | Always deletes the key, and with it every grant it held. The Secret goes too.                      |
-| `BucketAccess`  | Revokes the key's permissions on the bucket.                                                       |
+| Resource                  | Deleting it                                                                                        |
+|---------------------------|----------------------------------------------------------------------------------------------------|
+| `GarageCluster`           | Only removes the operator's record of the cluster. The layout and the data stay.                   |
+| `GarageClusterConnection` | Removes the connection. Delete it **last**: deleting the resources on it needs it.                 |
+| `Bucket`                  | `Retain` (default) keeps the bucket. `Delete` deletes it — but never one that still holds objects. |
+| `AccessKey`               | Always deletes the key, and with it every grant it held. The Secret goes too.                      |
+| `BucketAccess`            | Revokes the key's permissions on the bucket.                                                       |
 
 A resource whose backend cleanup cannot proceed keeps its finalizer and says why in its `message`, rather than silently leaving something behind.
 
@@ -291,7 +291,7 @@ A resource whose backend cleanup cannot proceed keeps its finalizer and says why
 
 The safest way to remove a customer is to delete their `Bucket`, `AccessKey` and `BucketAccess` resources first — `terraform destroy` does this in dependency order — and the namespace afterwards.
 
-Deleting the namespace right away works too. When Garage is installed in that namespace, Garage, its admin Secret and the `S3Connection` disappear at the same time as everything else, and waiting for them would keep the namespace in `Terminating` forever. So once a namespace is being deleted and its `S3Connection` is missing or not `READY`, the operator releases the remaining resources without cleaning up on the backend. If the backend lives in another namespace, the keys, buckets and grants of the deleted namespace then stay there and have to be removed in Garage by hand.
+Deleting the namespace right away works too. When Garage is installed in that namespace, Garage, its admin Secret and the `GarageClusterConnection` disappear at the same time as everything else, and waiting for them would keep the namespace in `Terminating` forever. So once a namespace is being deleted and its `GarageClusterConnection` is missing or not `READY`, the operator releases the remaining resources without cleaning up on the backend. If the backend lives in another namespace, the keys, buckets and grants of the deleted namespace then stay there and have to be removed in Garage by hand.
 
 ### Rotating credentials
 
@@ -303,11 +303,11 @@ The operator runs as a single replica without leader election. Two instances wou
 
 ### Health and metrics
 
-| Endpoint          | What it reports                                                                                                                                                                                               |
-|-------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/q/health/live`  | The operator process is alive.                                                                                                                                                                                |
-| `/q/health/ready` | The operator is running and its controllers are healthy. It deliberately does **not** probe the Garage backends: one unreachable Garage must not block the operator. Backend state is on each `S3Connection`. |
-| `/q/metrics`      | Prometheus metrics. The Pod carries the `prometheus.io/*` scrape annotations.                                                                                                                                 |
+| Endpoint          | What it reports                                                                                                                                                                                                          |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/q/health/live`  | The operator process is alive.                                                                                                                                                                                           |
+| `/q/health/ready` | The operator is running and its controllers are healthy. It deliberately does **not** probe the Garage backends: one unreachable Garage must not block the operator. Backend state is on each `GarageClusterConnection`. |
+| `/q/metrics`      | Prometheus metrics. The Pod carries the `prometheus.io/*` scrape annotations.                                                                                                                                            |
 
 ## Limitations
 

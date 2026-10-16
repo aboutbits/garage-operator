@@ -9,7 +9,7 @@ import it.aboutbits.garage.core.adminapi.dto.GetKeyInfoResponse;
 import it.aboutbits.garage.core.adminapi.dto.ListKeysResponseItem;
 import it.aboutbits.garage.core.adminapi.dto.UpdateBucketRequestBody;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -29,8 +29,8 @@ public class GarageService {
 
     private final GarageAdminClientFactory garageAdminClientFactory;
 
-    public ConnectionProbeResult probe(S3Connection s3Connection) {
-        var health = garageAdminClientFactory.create(s3Connection)
+    public ConnectionProbeResult probe(GarageClusterConnection garageClusterConnection) {
+        var health = garageAdminClientFactory.create(garageClusterConnection)
                 .getClusterHealth();
 
         var detail = "Garage cluster %s [storageNodes=%d, storageNodesUp=%d, partitionsAllOk=%d/%d]".formatted(
@@ -52,10 +52,10 @@ public class GarageService {
     }
 
     public Optional<BucketInfo> findBucket(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String name
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         return garageAdminApi.listBuckets().stream()
                 .filter(bucket -> bucket.globalAliases().contains(name))
@@ -67,10 +67,10 @@ public class GarageService {
     }
 
     public Optional<BucketInfo> getBucket(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String bucketId
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         // Checked through the listing rather than reading a failed GetBucketInfo as "gone".
         var bucketExists = garageAdminApi.listBuckets().stream()
@@ -86,21 +86,21 @@ public class GarageService {
     }
 
     public BucketInfo createBucket(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String name
     ) {
-        var created = garageAdminClientFactory.create(s3Connection)
+        var created = garageAdminClientFactory.create(garageClusterConnection)
                 .createBucket(new CreateBucketRequest(name));
 
         return toBucketInfo(created, name);
     }
 
     public BucketInfo updateBucketQuotas(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String bucketId,
             BucketQuotas quotas
     ) {
-        var updated = garageAdminClientFactory.create(s3Connection)
+        var updated = garageAdminClientFactory.create(garageClusterConnection)
                 .updateBucket(
                         bucketId,
                         new UpdateBucketRequestBody(
@@ -115,11 +115,11 @@ public class GarageService {
     }
 
     public void deleteBucket(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String bucketId
     ) {
         try {
-            garageAdminClientFactory.create(s3Connection)
+            garageAdminClientFactory.create(garageClusterConnection)
                     .deleteBucket(bucketId);
         } catch (WebApplicationException e) {
             // Garage answers `BucketNotEmpty` with 409.
@@ -132,10 +132,10 @@ public class GarageService {
     }
 
     public Optional<AccessKeyInfo> findAccessKey(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String name
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         // Garage does not enforce unique key names.
         var matches = garageAdminApi.listKeys().stream()
@@ -161,10 +161,10 @@ public class GarageService {
     }
 
     public Optional<AccessKeyInfo> getAccessKey(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String accessKeyId
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         var keyExists = garageAdminApi.listKeys().stream()
                 .anyMatch(key -> key.id().equals(accessKeyId));
@@ -177,11 +177,11 @@ public class GarageService {
     }
 
     public AccessKeyInfo createAccessKey(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String name,
             AccessKeyPermissions permissions
     ) {
-        var created = garageAdminClientFactory.create(s3Connection)
+        var created = garageAdminClientFactory.create(garageClusterConnection)
                 .createKey(UpdateKeyRequestBody.createKey(
                         name,
                         permissions.allowCreateBucket()
@@ -191,11 +191,11 @@ public class GarageService {
     }
 
     public AccessKeyInfo updateAccessKeyPermissions(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String accessKeyId,
             AccessKeyPermissions permissions
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         garageAdminApi.updateKey(
                 accessKeyId,
@@ -207,31 +207,31 @@ public class GarageService {
     }
 
     public void deleteAccessKey(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String accessKeyId
     ) {
-        garageAdminClientFactory.create(s3Connection)
+        garageAdminClientFactory.create(garageClusterConnection)
                 .deleteKey(accessKeyId);
     }
 
     public BucketPermissions getBucketKeyPermissions(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String bucketId,
             String accessKeyId
     ) {
-        var bucketInfo = garageAdminClientFactory.create(s3Connection)
+        var bucketInfo = garageAdminClientFactory.create(garageClusterConnection)
                 .getBucketInfo(bucketId);
 
         return permissionsOf(bucketInfo, accessKeyId);
     }
 
     public BucketPermissions setBucketKeyPermissions(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String bucketId,
             String accessKeyId,
             BucketPermissions permissions
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         // Allow and deny are complements, so one call of each reaches the desired state without a diff.
         var toAllow = new ApiBucketKeyPerm(
@@ -263,11 +263,11 @@ public class GarageService {
     }
 
     public void revokeBucketKey(
-            S3Connection s3Connection,
+            GarageClusterConnection garageClusterConnection,
             String bucketId,
             String accessKeyId
     ) {
-        var garageAdminApi = garageAdminClientFactory.create(s3Connection);
+        var garageAdminApi = garageAdminClientFactory.create(garageClusterConnection);
 
         // Checked through the listing rather than reading a failed call as "already gone".
         var bucketExists = garageAdminApi.listBuckets().stream()

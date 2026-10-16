@@ -83,7 +83,7 @@ jobs:
             The CRD manifests are attached to this release as `*.garage.aboutbits.it-v1.yml` assets and can be applied directly, for example:
             ```bash
             kubectl apply -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/garageclusters.garage.aboutbits.it-v1.yml
-            kubectl apply -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/s3connections.garage.aboutbits.it-v1.yml
+            kubectl apply -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/garageclusterconnections.garage.aboutbits.it-v1.yml
             kubectl apply -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/buckets.garage.aboutbits.it-v1.yml
             kubectl apply -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/accesskeys.garage.aboutbits.it-v1.yml
             kubectl apply -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/bucketaccesses.garage.aboutbits.it-v1.yml
@@ -93,7 +93,7 @@ jobs:
 
             Helm never upgrades CRDs, so apply the CRDs of this release **before** upgrading the chart:
             ```bash
-            for crd in garageclusters s3connections buckets accesskeys bucketaccesses; do
+            for crd in garageclusters garageclusterconnections buckets accesskeys bucketaccesses; do
               kubectl apply --server-side --force-conflicts -f https://github.com/${{ github.repository }}/releases/download/v${{ steps.nextVersion.outputs.version }}/${crd}.garage.aboutbits.it-v1.yml
             done
 

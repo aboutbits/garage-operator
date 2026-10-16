@@ -1,7 +1,7 @@
 package it.aboutbits.garage.core.adminapi;
 
 import it.aboutbits.garage.core.adminapi.dto.GetClusterHealthResponse;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -35,7 +35,7 @@ class GarageServiceTest {
                 256
         ));
 
-        when(garageAdminClientFactory.create(any(S3Connection.class))).thenReturn(garageAdminApi);
+        when(garageAdminClientFactory.create(any(GarageClusterConnection.class))).thenReturn(garageAdminApi);
     }
 
     @Nested
@@ -48,7 +48,7 @@ class GarageServiceTest {
             givenClusterHealth(status);
 
             // when
-            var result = garageService.probe(new S3Connection());
+            var result = garageService.probe(new GarageClusterConnection());
 
             // then
             assertThat(result.available()).isTrue();
@@ -62,7 +62,7 @@ class GarageServiceTest {
             givenClusterHealth("unavailable");
 
             // when
-            var result = garageService.probe(new S3Connection());
+            var result = garageService.probe(new GarageClusterConnection());
 
             // then
             assertThat(result.available()).isFalse();

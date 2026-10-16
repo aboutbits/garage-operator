@@ -1,7 +1,7 @@
 # AccessKey
 
 An `AccessKey` creates a set of S3 credentials on the backend named by its
-[`S3Connection`](s3-connection.md), and writes them into a Secret it owns.
+[`GarageClusterConnection`](garage-cluster-connection.md), and writes them into a Secret it owns.
 
 On its own an access key can do nothing: it has no access to any bucket until a
 [`BucketAccess`](bucket-access.md) grants it some.
@@ -26,17 +26,17 @@ spec:
 
 | Field               | Type                                        | Description                                                        | Required | Mutable |
 |---------------------|---------------------------------------------|--------------------------------------------------------------------|----------|---------|
-| `connectionRef`     | [`ResourceRef`](#resourceref-connectionref) | Reference to the `S3Connection` the key lives on.                  | Yes      | No      |
+| `connectionRef`     | [`ResourceRef`](#resourceref-connectionref) | Reference to the `GarageClusterConnection` the key lives on.       | Yes      | No      |
 | `name`              | `string`                                    | The name the key is created under on the backend.                  | Yes      | No      |
 | `secretName`        | `string`                                    | Name of the Secret to write. Defaults to `metadata.name`.          | No       | No      |
 | `allowCreateBucket` | `boolean`                                   | Whether the key may create buckets by itself. Defaults to `false`. | No       | Yes     |
 
 ### ResourceRef (`connectionRef`)
 
-| Field       | Type     | Description                                                                               | Required |
-|-------------|----------|-------------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the `S3Connection`. If not specified, uses the namespace of the `AccessKey`. | No       |
-| `name`      | `string` | Name of the `S3Connection`.                                                               | Yes      |
+| Field       | Type     | Description                                                                                          | Required |
+|-------------|----------|------------------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the `GarageClusterConnection`. If not specified, uses the namespace of the `AccessKey`. | No       |
+| `name`      | `string` | Name of the `GarageClusterConnection`.                                                               | Yes      |
 
 A change to a `Mutable` field is applied at the next reconcile.
 
@@ -44,7 +44,7 @@ A change to a `Mutable` field is applied at the next reconcile.
 
 `secretName` is immutable as well, from the first apply on: setting, changing or removing it later is refused. The operator has no right to delete Secrets, so a renamed Secret would leave the old one behind, with live credentials, until the `AccessKey` is deleted. Delete and recreate the `AccessKey` to use a different Secret name.
 
-The admin token of the `S3Connection` needs access to the Admin API endpoints `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey` and `DeleteKey`, see [`S3Connection`](s3-connection.md#spec).
+The admin token of the `GarageClusterConnection` needs access to the Admin API endpoints `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey` and `DeleteKey`, see [`GarageClusterConnection`](garage-cluster-connection.md#spec).
 
 `allowCreateBucket` is off by default on purpose. Buckets are meant to be declared as
 [`Bucket`](bucket.md) resources; a key that can create its own can grow storage outside of what is written down.
@@ -64,7 +64,7 @@ The Secret is always created **in the `AccessKey`'s own namespace**, and carries
 
 If a Secret of that name already exists and is not owned by the `AccessKey`, the operator leaves it untouched and reports `ERROR`. Taking it over would hand it to the `AccessKey`'s lifecycle, and Kubernetes would garbage-collect it — with whatever else it holds — when the `AccessKey` is deleted. The check runs before a key is created or adopted, so a refused `AccessKey` leaves no key on the backend that nobody can read, and its deletion leaves an existing key alone.
 
-Note the Secret does **not** carry the S3 endpoint; that lives on the `S3Connection`, and the connection currently records only the admin endpoint. A key added to the Secret by hand, such as the endpoint, is kept: the operator only compares and writes its own two keys.
+Note the Secret does **not** carry the S3 endpoint; that lives on the `GarageClusterConnection`, and the connection currently records only the admin endpoint. A key added to the Secret by hand, such as the endpoint, is kept: the operator only compares and writes its own two keys.
 
 ### If the Secret is deleted
 
@@ -81,7 +81,7 @@ It is written again on the next reconciliation, with the **same** credentials �
 
 The secret half of the credentials is deliberately **not** in the status: a status is readable by anyone who can read the resource, while the Secret is protected by RBAC.
 
-An `AccessKey` stays `PENDING` while its `S3Connection` does not exist or is not `READY`, and is retried every 60 seconds. Nothing is created on the backend in that state.
+An `AccessKey` stays `PENDING` while its `GarageClusterConnection` does not exist or is not `READY`, and is retried every 60 seconds. Nothing is created on the backend in that state.
 
 `ERROR` means that the last reconciliation failed, and `message` has the reason: for example the backend cannot be reached, more than one key has the name, another `AccessKey` already manages the key, or a Secret of that name exists that the `AccessKey` does not own. The operator tries again every 60 seconds.
 
@@ -106,10 +106,10 @@ Unlike [`Bucket`](bucket.md), an `AccessKey` has **no reclaim policy**: deleting
 
 The Secret goes with it, through its owner reference.
 
-If the resource never got as far as creating a key — it stayed `PENDING` because its `S3Connection`
+If the resource never got as far as creating a key — it stayed `PENDING` because its `GarageClusterConnection`
 was missing — deletion completes immediately rather than waiting for a connection that may never appear.
 
-Otherwise a missing or not `READY` `S3Connection` keeps the resource around until the connection is back, so the key is not silently left behind. The one exception is deleting the **whole namespace**: when Garage is installed in the same namespace, the connection, its admin Secret and Garage itself all go away at once, and waiting for them would keep the namespace in `Terminating` forever. Once the namespace is being deleted and the connection is missing or not `READY`, the resource is released without deleting the key. A backend that lives in another namespace then keeps the key, and it has to be removed there by hand.
+Otherwise a missing or not `READY` `GarageClusterConnection` keeps the resource around until the connection is back, so the key is not silently left behind. The one exception is deleting the **whole namespace**: when Garage is installed in the same namespace, the connection, its admin Secret and Garage itself all go away at once, and waiting for them would keep the namespace in `Terminating` forever. Once the namespace is being deleted and the connection is missing or not `READY`, the resource is released without deleting the key. A backend that lives in another namespace then keeps the key, and it has to be removed there by hand.
 
 ## Rotation
 
