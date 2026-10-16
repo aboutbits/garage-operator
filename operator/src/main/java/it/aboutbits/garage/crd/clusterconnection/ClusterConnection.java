@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.s3connection;
+package it.aboutbits.garage.crd.clusterconnection;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.fabric8.crd.generator.annotation.AdditionalPrinterColumn;
@@ -40,8 +40,8 @@ import org.jspecify.annotations.NullMarked;
         type = AdditionalPrinterColumn.Type.DATE
 )
 @NullMarked
-public class S3Connection
-        extends CustomResource<S3ConnectionSpec, CRStatus>
+public class ClusterConnection
+        extends CustomResource<ClusterConnectionSpec, CRStatus>
         implements Namespaced, Named {
     @Override
     @JsonIgnore

@@ -5,7 +5,7 @@ import it.aboutbits.garage._support.testdata.persisted.creator.AccessKeyCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.BucketAccessCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.BucketCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterCreate;
-import it.aboutbits.garage._support.testdata.persisted.creator.S3ConnectionCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.ClusterConnectionCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.SecretKeyRefCreate;
 import it.aboutbits.garage.core.CRPhase;
 import it.aboutbits.garage.core.ResourceRef;
@@ -55,17 +55,17 @@ public class Given {
     public ResourceRef readyConnection(String namespace) {
         appliedLayout();
 
-        var s3Connection = one()
-                .s3Connection()
+        var clusterConnection = one()
+                .clusterConnection()
                 .withNamespace(namespace)
                 .returnFirst();
 
-        awaitPhase(kubernetesClient, s3Connection, CRPhase.READY);
+        awaitPhase(kubernetesClient, clusterConnection, CRPhase.READY);
 
         var connectionRef = new ResourceRef();
 
-        connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
-        connectionRef.setName(s3Connection.getMetadata().getName());
+        connectionRef.setNamespace(clusterConnection.getMetadata().getNamespace());
+        connectionRef.setName(clusterConnection.getMetadata().getName());
 
         return connectionRef;
     }
@@ -139,8 +139,8 @@ public class Given {
             );
         }
 
-        public S3ConnectionCreate s3Connection() {
-            return new S3ConnectionCreate(
+        public ClusterConnectionCreate clusterConnection() {
+            return new ClusterConnectionCreate(
                     numberOfItems,
                     given,
                     kubernetesClient,

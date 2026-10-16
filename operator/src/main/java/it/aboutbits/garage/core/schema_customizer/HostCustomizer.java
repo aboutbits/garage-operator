@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 ///
 /// ```java
 /// @SchemaCustomizer(value = HostCustomizer.class)
-/// public class S3ConnectionSpec {
+/// public class ClusterConnectionSpec {
 ///     private String host = "";        // gets custom format
 ///     private String anotherHost = ""; // gets custom format
 /// }
@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 ///
 /// ```java
 /// @SchemaCustomizer(value = HostCustomizer.class, input = "host,anotherHost")
-/// public class S3ConnectionSpec {
+/// public class ClusterConnectionSpec {
 ///     private String host = "";          // gets custom format
 ///     private String anotherHost = "";   // gets custom format
 ///     private String unchangedHost = ""; // unchanged

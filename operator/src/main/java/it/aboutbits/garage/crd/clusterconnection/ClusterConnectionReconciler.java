@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.s3connection;
+package it.aboutbits.garage.crd.clusterconnection;
 
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
@@ -34,17 +34,17 @@ import java.util.concurrent.TimeUnit;
 )
 @RequiredArgsConstructor
 @NullMarked
-public class S3ConnectionReconciler
-        extends BaseReconciler<S3Connection, CRStatus>
-        implements Reconciler<S3Connection> {
+public class ClusterConnectionReconciler
+        extends BaseReconciler<ClusterConnection, CRStatus>
+        implements Reconciler<ClusterConnection> {
     private static final long UNAVAILABLE_RETRY_SECONDS = 30;
 
     private final GarageService garageService;
 
     @Override
-    public UpdateControl<S3Connection> reconcile(
-            S3Connection resource,
-            Context<S3Connection> context
+    public UpdateControl<ClusterConnection> reconcile(
+            ClusterConnection resource,
+            Context<ClusterConnection> context
     ) {
         var status = initializeStatus(resource);
 
@@ -52,7 +52,7 @@ public class S3ConnectionReconciler
         var name = resource.getMetadata().getName();
 
         log.info(
-                "Reconciling S3Connection [resource={}/{}, status.phase={}]",
+                "Reconciling ClusterConnection [resource={}/{}, status.phase={}]",
                 namespace,
                 name,
                 status.getPhase()

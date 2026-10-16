@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.s3connection;
+package it.aboutbits.garage.crd.clusterconnection;
 
 import io.fabric8.generator.annotation.Required;
 import io.fabric8.generator.annotation.ValidationRule;
@@ -10,7 +10,7 @@ import org.jspecify.annotations.NullMarked;
 @Getter
 @Setter
 @NullMarked
-public class S3ConnectionSpec {
+public class ClusterConnectionSpec {
     /// The Garage Admin API on port 3903, not the S3 endpoint, e.g. `http://acme-garage.acme.svc:3903`.
     @Required
     @ValidationRule(
@@ -20,7 +20,7 @@ public class S3ConnectionSpec {
     // Buckets and access keys record the ids this Garage gave them, so another Garage would get second ones.
     @ValidationRule(
             value = "self == oldSelf",
-            message = "The adminEndpoint is immutable. Delete and recreate the S3Connection to point it at a different Garage."
+            message = "The adminEndpoint is immutable. Delete and recreate the ClusterConnection to point it at a different Garage."
     )
     private String adminEndpoint = "";
 

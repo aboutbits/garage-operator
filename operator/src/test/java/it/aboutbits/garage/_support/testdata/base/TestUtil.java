@@ -8,8 +8,8 @@ import it.aboutbits.garage.core.CRStatus;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.bucket.Bucket;
 import it.aboutbits.garage.crd.bucketaccess.BucketAccess;
+import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
 import org.jspecify.annotations.NullMarked;
 
 import java.util.concurrent.TimeUnit;
@@ -25,7 +25,7 @@ public final class TestUtil {
         deleteResource(kubernetesClient, BucketAccess.class);
         deleteResource(kubernetesClient, AccessKey.class);
         deleteResource(kubernetesClient, Bucket.class);
-        deleteResource(kubernetesClient, S3Connection.class);
+        deleteResource(kubernetesClient, ClusterConnection.class);
         deleteResource(kubernetesClient, GarageCluster.class);
     }
 

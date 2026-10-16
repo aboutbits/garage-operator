@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.s3connection;
+package it.aboutbits.garage.crd.clusterconnection;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
@@ -41,7 +41,7 @@ import static org.awaitility.Awaitility.await;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @RequiredArgsConstructor
 @NullMarked
-class S3ConnectionReconcilerTest {
+class ClusterConnectionReconcilerTest {
     private final KubernetesClient kubernetesClient;
 
     private final Given given;
@@ -93,12 +93,12 @@ class S3ConnectionReconcilerTest {
             given.appliedLayout();
 
             // when
-            var s3Connection = given.one()
-                    .s3Connection()
+            var clusterConnection = given.one()
+                    .clusterConnection()
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Garage cluster");
         }
@@ -116,13 +116,13 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // when
-            var s3Connection = given.one()
-                    .s3Connection()
+            var clusterConnection = given.one()
+                    .clusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             // then
-            awaitPhase(kubernetesClient, s3Connection, CRPhase.READY);
+            awaitPhase(kubernetesClient, clusterConnection, CRPhase.READY);
         }
     }
 
@@ -138,13 +138,13 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // when
-            var s3Connection = given.one()
-                    .s3Connection()
+            var clusterConnection = given.one()
+                    .clusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage())
                     .startsWith("The Garage Admin API request failed [status=403, code=")
@@ -162,13 +162,13 @@ class S3ConnectionReconcilerTest {
                     .returnFirst();
 
             // when
-            var s3Connection = given.one()
-                    .s3Connection()
+            var clusterConnection = given.one()
+                    .clusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Secret reference not found");
         }
@@ -177,14 +177,14 @@ class S3ConnectionReconcilerTest {
         @DisplayName("An unreachable admin endpoint should surface as an error")
         void unreachableEndpoint_setsErrorPhase() {
             // when
-            var s3Connection = given.one()
-                    .s3Connection()
+            var clusterConnection = given.one()
+                    .clusterConnection()
                     // Reserved port that nothing listens on.
                     .withAdminEndpoint("http://localhost:1")
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, s3Connection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).isNotBlank();
         }
@@ -200,7 +200,7 @@ class S3ConnectionReconcilerTest {
             var thrown = catchThrowableOfType(
                     KubernetesClientException.class,
                     () -> given.one()
-                            .s3Connection()
+                            .clusterConnection()
                             .withAdminEndpoint(adminEndpoint)
                             .returnFirst()
             );
@@ -214,16 +214,16 @@ class S3ConnectionReconcilerTest {
         @DisplayName("Changing the admin endpoint should be rejected")
         void changedAdminEndpoint_isRejected() {
             // given
-            var s3Connection = given.one()
-                    .s3Connection()
+            var clusterConnection = given.one()
+                    .clusterConnection()
                     .returnFirst();
 
             // when
             var thrown = catchThrowableOfType(
                     KubernetesClientException.class,
-                    () -> kubernetesClient.resources(S3Connection.class)
-                            .inNamespace(s3Connection.getMetadata().getNamespace())
-                            .withName(s3Connection.getMetadata().getName())
+                    () -> kubernetesClient.resources(ClusterConnection.class)
+                            .inNamespace(clusterConnection.getMetadata().getNamespace())
+                            .withName(clusterConnection.getMetadata().getName())
                             .edit(item -> {
                                 item.getSpec().setAdminEndpoint("http://other-garage.acme.svc:3903");
                                 return item;

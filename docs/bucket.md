@@ -1,6 +1,6 @@
 # Bucket
 
-A `Bucket` manages one bucket on the backend named by its [`S3Connection`](s3-connection.md).
+A `Bucket` manages one bucket on the backend named by its [`ClusterConnection`](cluster-connection.md).
 
 ## Example
 
@@ -22,19 +22,19 @@ spec:
 
 ## Spec
 
-| Field           | Type                                           | Description                                          | Required | Mutable |
-|-----------------|------------------------------------------------|------------------------------------------------------|----------|---------|
-| `connectionRef` | [`ResourceRef`](#resourceref-connectionref)    | Reference to the `S3Connection` the bucket lives on. | Yes      | No      |
-| `name`          | `string`                                       | The name the bucket is addressed by over S3.         | Yes      | No      |
-| `reclaimPolicy` | [`ReclaimPolicy`](#deletion)                   | `Retain` (default) or `Delete`.                      | No       | Yes     |
-| `quotas`        | [`BucketQuotasSpec`](#bucketquotasspec-quotas) | Limits of the bucket. Omit for an unlimited bucket.  | No       | Yes     |
+| Field           | Type                                           | Description                                               | Required | Mutable |
+|-----------------|------------------------------------------------|-----------------------------------------------------------|----------|---------|
+| `connectionRef` | [`ResourceRef`](#resourceref-connectionref)    | Reference to the `ClusterConnection` the bucket lives on. | Yes      | No      |
+| `name`          | `string`                                       | The name the bucket is addressed by over S3.              | Yes      | No      |
+| `reclaimPolicy` | [`ReclaimPolicy`](#deletion)                   | `Retain` (default) or `Delete`.                           | No       | Yes     |
+| `quotas`        | [`BucketQuotasSpec`](#bucketquotasspec-quotas) | Limits of the bucket. Omit for an unlimited bucket.       | No       | Yes     |
 
 ### ResourceRef (`connectionRef`)
 
-| Field       | Type     | Description                                                                            | Required |
-|-------------|----------|----------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the `S3Connection`. If not specified, uses the namespace of the `Bucket`. | No       |
-| `name`      | `string` | Name of the `S3Connection`.                                                            | Yes      |
+| Field       | Type     | Description                                                                                 | Required |
+|-------------|----------|---------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the `ClusterConnection`. If not specified, uses the namespace of the `Bucket`. | No       |
+| `name`      | `string` | Name of the `ClusterConnection`.                                                            | Yes      |
 
 ### BucketQuotasSpec (`quotas`)
 
@@ -49,7 +49,7 @@ A change to a `Mutable` field is applied at the next reconcile.
 
 It is immutable because no supported backend can rename a bucket: accepting a change would orphan the original and quietly create a second one. Delete and recreate the `Bucket` to use a different name. `connectionRef` is immutable for the same reason: moving the resource to another backend would create a second bucket there.
 
-The admin token of the `S3Connection` needs access to the Admin API endpoints `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket` and `DeleteBucket`, see [`S3Connection`](s3-connection.md#spec).
+The admin token of the `ClusterConnection` needs access to the Admin API endpoints `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket` and `DeleteBucket`, see [`ClusterConnection`](cluster-connection.md#spec).
 
 ## Status
 
@@ -60,7 +60,7 @@ The admin token of the `S3Connection` needs access to the Admin API endpoints `L
 | `objects` / `bytes` | What the bucket currently holds, as last observed.                               |
 | `message`           | Human-readable detail about the current state.                                   |
 
-A `Bucket` stays `PENDING` while its `S3Connection` does not exist or is not `READY`, and is retried every 60 seconds. Nothing is created on the backend in that state, so a bucket is never created against a cluster that has no layout applied.
+A `Bucket` stays `PENDING` while its `ClusterConnection` does not exist or is not `READY`, and is retried every 60 seconds. Nothing is created on the backend in that state, so a bucket is never created against a cluster that has no layout applied.
 
 `ERROR` means that the last reconciliation failed, and `message` has the reason: for example the backend cannot be reached, `quotas.maxSize` is not a valid quantity, or another `Bucket` already manages the bucket. The operator tries again every 60 seconds.
 
@@ -99,6 +99,6 @@ to release the resource without deleting it.
 The CR keeps its finalizer and stays visible in that state, retrying every 60 seconds, so a deletion that cannot proceed is a visible decision rather than silent data loss. To resolve it, either empty the bucket or switch `reclaimPolicy` to `Retain`.
 
 If the bucket is already gone from the backend, deletion of the CR completes normally. The same is true if the bucket was never created, because the `Bucket` stayed `PENDING` waiting for its
-`S3Connection` — deletion then completes immediately rather than waiting for a connection that may never appear.
+`ClusterConnection` — deletion then completes immediately rather than waiting for a connection that may never appear.
 
-Otherwise, a `Delete` bucket whose `S3Connection` is missing or not `READY` keeps the CR around until the connection is back. The one exception is deleting the **whole namespace**: when Garage is installed in the same namespace, the connection and Garage itself go away at once, and waiting for them would keep the namespace in `Terminating` forever. Once the namespace is being deleted and the connection is missing or not `READY`, the CR is released without deleting the bucket. No data is lost that way; a backend that lives in another namespace simply keeps the bucket.
+Otherwise, a `Delete` bucket whose `ClusterConnection` is missing or not `READY` keeps the CR around until the connection is back. The one exception is deleting the **whole namespace**: when Garage is installed in the same namespace, the connection and Garage itself go away at once, and waiting for them would keep the namespace in `Terminating` forever. Once the namespace is being deleted and the connection is missing or not `READY`, the CR is released without deleting the bucket. No data is lost that way; a backend that lives in another namespace simply keeps the bucket.
