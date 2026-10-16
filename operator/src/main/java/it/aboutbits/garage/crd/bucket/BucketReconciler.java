@@ -16,7 +16,7 @@ import it.aboutbits.garage.core.ReclaimPolicy;
 import it.aboutbits.garage.core.adminapi.BucketInfo;
 import it.aboutbits.garage.core.adminapi.BucketNotEmptyException;
 import it.aboutbits.garage.core.adminapi.GarageService;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
@@ -75,15 +75,15 @@ public class BucketReconciler
 
         var connectionRef = spec.getConnectionRef();
 
-        var clusterConnectionOptional = getReferencedClusterConnection(
+        var garageClusterConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 connectionRef
         );
 
-        if (clusterConnectionOptional.isEmpty()) {
+        if (garageClusterConnectionOptional.isEmpty()) {
             status.updatePhase(CRPhase.PENDING)
-                    .setMessage("The specified ClusterConnection does not exist or is not ready yet [spec.connectionRef=%s/%s]".formatted(
+                    .setMessage("The specified GarageClusterConnection does not exist or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     ));
@@ -92,11 +92,11 @@ public class BucketReconciler
                     .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
         }
 
-        var clusterConnection = clusterConnectionOptional.get();
+        var garageClusterConnection = garageClusterConnectionOptional.get();
 
         try {
             return reconcile(
-                    clusterConnection,
+                    garageClusterConnection,
                     resource,
                     status
             );
@@ -146,7 +146,7 @@ public class BucketReconciler
             return DeleteControl.defaultDelete();
         }
 
-        // Never reached the backend: delete directly, even if the ClusterConnection is missing.
+        // Never reached the backend: delete directly, even if the GarageClusterConnection is missing.
         var bucketId = status.getBucketId();
 
         if (bucketId == null) {
@@ -161,17 +161,17 @@ public class BucketReconciler
 
         var connectionRef = spec.getConnectionRef();
 
-        var clusterConnectionOptional = getReferencedClusterConnection(
+        var garageClusterConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 connectionRef
         );
 
-        if (clusterConnectionOptional.isEmpty()) {
+        if (garageClusterConnectionOptional.isEmpty()) {
             if (isNamespaceTerminating(kubernetesClient, resource)) {
                 // Release without backend cleanup (no data is lost), otherwise the namespace deletion hangs.
                 log.warn(
-                        "The namespace is being deleted and the ClusterConnection is gone, releasing the Bucket without deleting the bucket on the backend [resource={}/{}, bucketId={}]",
+                        "The namespace is being deleted and the GarageClusterConnection is gone, releasing the Bucket without deleting the bucket on the backend [resource={}/{}, bucketId={}]",
                         namespace,
                         name,
                         bucketId
@@ -184,18 +184,18 @@ public class BucketReconciler
                     resource,
                     status,
                     context,
-                    "The specified ClusterConnection no longer exists or is not ready yet [spec.connectionRef=%s/%s]".formatted(
+                    "The specified GarageClusterConnection no longer exists or is not ready yet [spec.connectionRef=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     )
             );
         }
 
-        var clusterConnection = clusterConnectionOptional.get();
+        var garageClusterConnection = garageClusterConnectionOptional.get();
 
         try {
             // By recorded id, never by name: the name may now belong to another bucket.
-            var bucketOptional = garageService.getBucket(clusterConnection, bucketId);
+            var bucketOptional = garageService.getBucket(garageClusterConnection, bucketId);
 
             if (bucketOptional.isEmpty()) {
                 log.info(
@@ -209,7 +209,7 @@ public class BucketReconciler
             }
 
             garageService.deleteBucket(
-                    clusterConnection,
+                    garageClusterConnection,
                     bucketId
             );
 
@@ -254,7 +254,7 @@ public class BucketReconciler
     }
 
     private UpdateControl<Bucket> reconcile(
-            ClusterConnection clusterConnection,
+            GarageClusterConnection garageClusterConnection,
             Bucket resource,
             BucketStatus status
     ) {
@@ -266,7 +266,7 @@ public class BucketReconciler
         var desiredQuotas = bucketService.desiredQuotas(spec.getQuotas());
 
         var bucketOptional = findManagedBucket(
-                clusterConnection,
+                garageClusterConnection,
                 resource,
                 status
         );
@@ -282,14 +282,14 @@ public class BucketReconciler
                     spec.getName()
             );
 
-            bucket = garageService.createBucket(clusterConnection, spec.getName());
+            bucket = garageService.createBucket(garageClusterConnection, spec.getName());
 
             // Recorded before the quotas can fail: status is patched on errors too, so cleanup finds the bucket.
             status.setBucketId(bucket.id());
 
             if (!desiredQuotas.isEmpty()) {
                 bucket = garageService.updateBucketQuotas(
-                        clusterConnection,
+                        garageClusterConnection,
                         bucket.id(),
                         desiredQuotas
                 );
@@ -319,7 +319,7 @@ public class BucketReconciler
                 );
 
                 bucket = garageService.updateBucketQuotas(
-                        clusterConnection,
+                        garageClusterConnection,
                         bucket.id(),
                         desiredQuotas
                 );
@@ -340,14 +340,14 @@ public class BucketReconciler
     /// After the first bind the bucket is addressed by its recorded id; the name is only used to
     /// discover (or adopt) it the first time, or again if the recorded bucket was deleted.
     private Optional<BucketInfo> findManagedBucket(
-            ClusterConnection clusterConnection,
+            GarageClusterConnection garageClusterConnection,
             Bucket resource,
             BucketStatus status
     ) {
         var recordedBucketId = status.getBucketId();
 
         if (recordedBucketId != null) {
-            var recorded = garageService.getBucket(clusterConnection, recordedBucketId);
+            var recorded = garageService.getBucket(garageClusterConnection, recordedBucketId);
 
             if (recorded.isPresent()) {
                 return recorded;
@@ -361,7 +361,7 @@ public class BucketReconciler
             );
         }
 
-        var found = garageService.findBucket(clusterConnection, resource.getSpec().getName());
+        var found = garageService.findBucket(garageClusterConnection, resource.getSpec().getName());
 
         found.ifPresent(bucket -> requireNotManagedElsewhere(resource, bucket.id()));
 

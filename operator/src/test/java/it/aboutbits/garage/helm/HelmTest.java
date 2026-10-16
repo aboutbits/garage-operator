@@ -55,7 +55,7 @@ class HelmTest {
             "bucket", "buckets",
             "bucketaccess", "bucketaccesses",
             "garagecluster", "garageclusters",
-            "clusterconnection", "clusterconnections"
+            "garageclusterconnection", "garageclusterconnections"
     );
 
     private final String chartName;

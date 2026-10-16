@@ -1,6 +1,6 @@
-# ClusterConnection
+# GarageClusterConnection
 
-A `ClusterConnection` names a Garage Admin API and the token to administer it. Buckets, access keys and permissions reference a connection, which tells the operator where to create them.
+A `GarageClusterConnection` names a Garage Admin API and the token to administer it. Buckets, access keys and permissions reference a connection, which tells the operator where to create them.
 
 The operator's work is almost entirely **admin-plane**, and the admin plane is not part of the S3 API: Garage has no IAM and no bucket policies, and manages buckets, keys and their per-key, per-bucket grants through its Admin API only.
 
@@ -11,7 +11,7 @@ For Garage the two are siblings, not alternatives:
 | Resource                             | Answers                                                     |
 |--------------------------------------|-------------------------------------------------------------|
 | [`GarageCluster`](garage-cluster.md) | Is the cluster itself set up? (layout assigned and applied) |
-| `ClusterConnection`                  | Can I administer object storage on this backend right now?  |
+| `GarageClusterConnection`            | Can I administer object storage on this backend right now?  |
 
 A connection only reports `READY` when the backend can actually serve requests. A Garage node that answers its Admin API but has no layout reports health `unavailable`, and the connection stays
 `PENDING` with a message pointing at the `GarageCluster`. Because [`Bucket`](bucket.md) and key resources gate on their connection being `READY`, that one check keeps them from acting against a cluster that is not finished bootstrapping.
@@ -22,7 +22,7 @@ Both resources reference the same admin endpoint and Secret. That duplication is
 
 ```yaml
 apiVersion: garage.aboutbits.it/v1
-kind: ClusterConnection
+kind: GarageClusterConnection
 metadata:
   namespace: acme
   name: acme
@@ -31,12 +31,6 @@ spec:
   adminSecretRef:
     name: acme-garage
     key: admin_token
-```
-
-The [AboutBits PostgreSQL Operator](https://github.com/aboutbits/postgresql-operator) has a `ClusterConnection` of its own, in the group `postgresql.aboutbits.it`. The two are separate resources and can be installed side by side, but with both installed, a plain `kubectl get clusterconnections` returns only one of them. Use the full resource name to get this one:
-
-```bash
-kubectl get clusterconnections.garage.aboutbits.it --all-namespaces
 ```
 
 ## Spec
@@ -48,19 +42,19 @@ kubectl get clusterconnections.garage.aboutbits.it --all-namespaces
 
 ### SecretKeyRef (`adminSecretRef`)
 
-| Field       | Type     | Description                                                                               | Required |
-|-------------|----------|-------------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `ClusterConnection`. | No       |
-| `name`      | `string` | Name of the Secret.                                                                       | Yes      |
-| `key`       | `string` | Key within the Secret. The AboutBits Garage chart uses `admin_token`.                     | Yes      |
+| Field       | Type     | Description                                                                                     | Required |
+|-------------|----------|-------------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageClusterConnection`. | No       |
+| `name`      | `string` | Name of the Secret.                                                                             | Yes      |
+| `key`       | `string` | Key within the Secret. The AboutBits Garage chart uses `admin_token`.                           | Yes      |
 
-`adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `ClusterConnection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token.
+`adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `GarageClusterConnection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token.
 
 The token needs access to these Admin API endpoints:
 
 | Used by                            | Endpoints                                                                      |
 |------------------------------------|--------------------------------------------------------------------------------|
-| `ClusterConnection`                | `GetClusterHealth`                                                             |
+| `GarageClusterConnection`          | `GetClusterHealth`                                                             |
 | [`Bucket`](bucket.md)              | `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket`, `DeleteBucket` |
 | [`AccessKey`](access-key.md)       | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
 | [`BucketAccess`](bucket-access.md) | `ListBuckets`, `GetBucketInfo`, `AllowBucketKey`, `DenyBucketKey`              |
@@ -82,4 +76,4 @@ Note that Garage's `degraded` status still counts as `READY`: a quorum of write 
 
 ## Health endpoint
 
-The operator's readiness endpoint does **not** probe backends. One unreachable Garage would otherwise make the operator itself unready and block its rollout, although the operator is fine and every other backend is still being served. The state of each backend is reported on its `ClusterConnection` instead.
+The operator's readiness endpoint does **not** probe backends. One unreachable Garage would otherwise make the operator itself unready and block its rollout, although the operator is fine and every other backend is still being served. The state of each backend is reported on its `GarageClusterConnection` instead.

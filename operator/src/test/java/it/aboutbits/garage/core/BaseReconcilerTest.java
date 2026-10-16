@@ -7,8 +7,8 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.Resource;
 import it.aboutbits.garage.core.adminapi.GarageService;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnectionReconciler;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnectionReconciler;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
@@ -27,22 +27,22 @@ class BaseReconcilerTest {
     private final KubernetesClient kubernetesClient = mock(KubernetesClient.class);
 
     // Any concrete reconciler, since the method under test lives in the base class.
-    private final ClusterConnectionReconciler reconciler = new ClusterConnectionReconciler(mock(GarageService.class));
+    private final GarageClusterConnectionReconciler reconciler = new GarageClusterConnectionReconciler(mock(GarageService.class));
 
-    private static ClusterConnection clusterConnection(
+    private static GarageClusterConnection garageClusterConnection(
             String name,
             long generation
     ) {
-        var clusterConnection = new ClusterConnection();
+        var garageClusterConnection = new GarageClusterConnection();
 
-        clusterConnection.setMetadata(new ObjectMetaBuilder()
+        garageClusterConnection.setMetadata(new ObjectMetaBuilder()
                 .withNamespace(NAMESPACE)
                 .withName(name)
                 .withGeneration(generation)
                 .build()
         );
 
-        return clusterConnection;
+        return garageClusterConnection;
     }
 
     private static CRStatus status(
@@ -58,9 +58,9 @@ class BaseReconcilerTest {
     }
 
     @Nested
-    class GetReferencedClusterConnection {
+    class GetReferencedGarageClusterConnection {
         /// The connectionRef has no namespace, so the connection is looked up in the namespace of the resource.
-        private final ClusterConnection resource = clusterConnection("acme-resource", 1);
+        private final GarageClusterConnection resource = garageClusterConnection("acme-resource", 1);
 
         private final ResourceRef connectionRef = connectionRef();
 
@@ -73,17 +73,17 @@ class BaseReconcilerTest {
         }
 
         @SuppressWarnings("unchecked")
-        private void givenConnection(@Nullable ClusterConnection clusterConnection) {
-            MixedOperation<ClusterConnection, KubernetesResourceList<ClusterConnection>, Resource<ClusterConnection>> operation =
+        private void givenConnection(@Nullable GarageClusterConnection garageClusterConnection) {
+            MixedOperation<GarageClusterConnection, KubernetesResourceList<GarageClusterConnection>, Resource<GarageClusterConnection>> operation =
                     mock(MixedOperation.class);
-            NonNamespaceOperation<ClusterConnection, KubernetesResourceList<ClusterConnection>, Resource<ClusterConnection>> namespaceOperation =
+            NonNamespaceOperation<GarageClusterConnection, KubernetesResourceList<GarageClusterConnection>, Resource<GarageClusterConnection>> namespaceOperation =
                     mock(NonNamespaceOperation.class);
-            Resource<ClusterConnection> connectionResource = mock(Resource.class);
+            Resource<GarageClusterConnection> connectionResource = mock(Resource.class);
 
-            when(kubernetesClient.resources(ClusterConnection.class)).thenReturn(operation);
+            when(kubernetesClient.resources(GarageClusterConnection.class)).thenReturn(operation);
             when(operation.inNamespace(NAMESPACE)).thenReturn(namespaceOperation);
             when(namespaceOperation.withName(CONNECTION_NAME)).thenReturn(connectionResource);
-            when(connectionResource.get()).thenReturn(clusterConnection);
+            when(connectionResource.get()).thenReturn(garageClusterConnection);
         }
 
         @Test
@@ -93,7 +93,7 @@ class BaseReconcilerTest {
             givenConnection(null);
 
             // when
-            var result = reconciler.getReferencedClusterConnection(kubernetesClient, resource, connectionRef);
+            var result = reconciler.getReferencedGarageClusterConnection(kubernetesClient, resource, connectionRef);
 
             // then
             assertThat(result).isEmpty();
@@ -103,10 +103,10 @@ class BaseReconcilerTest {
         @DisplayName("A connection that has not been probed yet should not be returned")
         void connectionWithoutStatus_isEmpty() {
             // given
-            givenConnection(clusterConnection(CONNECTION_NAME, 1));
+            givenConnection(garageClusterConnection(CONNECTION_NAME, 1));
 
             // when
-            var result = reconciler.getReferencedClusterConnection(kubernetesClient, resource, connectionRef);
+            var result = reconciler.getReferencedGarageClusterConnection(kubernetesClient, resource, connectionRef);
 
             // then
             assertThat(result).isEmpty();
@@ -116,14 +116,14 @@ class BaseReconcilerTest {
         @DisplayName("A connection that is not ready should not be returned")
         void pendingConnection_isEmpty() {
             // given
-            var clusterConnection = clusterConnection(CONNECTION_NAME, 1);
+            var garageClusterConnection = garageClusterConnection(CONNECTION_NAME, 1);
 
-            clusterConnection.setStatus(status(CRPhase.PENDING, 1));
+            garageClusterConnection.setStatus(status(CRPhase.PENDING, 1));
 
-            givenConnection(clusterConnection);
+            givenConnection(garageClusterConnection);
 
             // when
-            var result = reconciler.getReferencedClusterConnection(kubernetesClient, resource, connectionRef);
+            var result = reconciler.getReferencedGarageClusterConnection(kubernetesClient, resource, connectionRef);
 
             // then
             assertThat(result).isEmpty();
@@ -133,14 +133,14 @@ class BaseReconcilerTest {
         @DisplayName("A connection that is ready for an older generation should not be returned")
         void readyForOlderGeneration_isEmpty() {
             // given
-            var clusterConnection = clusterConnection(CONNECTION_NAME, 2);
+            var garageClusterConnection = garageClusterConnection(CONNECTION_NAME, 2);
 
-            clusterConnection.setStatus(status(CRPhase.READY, 1));
+            garageClusterConnection.setStatus(status(CRPhase.READY, 1));
 
-            givenConnection(clusterConnection);
+            givenConnection(garageClusterConnection);
 
             // when
-            var result = reconciler.getReferencedClusterConnection(kubernetesClient, resource, connectionRef);
+            var result = reconciler.getReferencedGarageClusterConnection(kubernetesClient, resource, connectionRef);
 
             // then
             assertThat(result).isEmpty();
@@ -150,17 +150,17 @@ class BaseReconcilerTest {
         @DisplayName("A connection that is ready for the current generation should be returned")
         void readyForCurrentGeneration_isReturned() {
             // given
-            var clusterConnection = clusterConnection(CONNECTION_NAME, 2);
+            var garageClusterConnection = garageClusterConnection(CONNECTION_NAME, 2);
 
-            clusterConnection.setStatus(status(CRPhase.READY, 2));
+            garageClusterConnection.setStatus(status(CRPhase.READY, 2));
 
-            givenConnection(clusterConnection);
+            givenConnection(garageClusterConnection);
 
             // when
-            var result = reconciler.getReferencedClusterConnection(kubernetesClient, resource, connectionRef);
+            var result = reconciler.getReferencedGarageClusterConnection(kubernetesClient, resource, connectionRef);
 
             // then
-            assertThat(result).containsSame(clusterConnection);
+            assertThat(result).containsSame(garageClusterConnection);
         }
     }
 }

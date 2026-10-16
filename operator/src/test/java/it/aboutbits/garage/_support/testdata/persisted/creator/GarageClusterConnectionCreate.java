@@ -5,8 +5,8 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import it.aboutbits.garage._support.testdata.base.TestDataCreator;
 import it.aboutbits.garage._support.testdata.persisted.Given;
 import it.aboutbits.garage.core.SecretKeyRef;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnectionSpec;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnectionSpec;
 import lombok.Setter;
 import lombok.experimental.Accessors;
 import org.jspecify.annotations.NullMarked;
@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 @Setter
 @Accessors(fluent = true, chain = true)
 @NullMarked
-public class ClusterConnectionCreate extends TestDataCreator<ClusterConnection> {
+public class GarageClusterConnectionCreate extends TestDataCreator<GarageClusterConnection> {
     private final Given given;
 
     private final KubernetesClient kubernetesClient;
@@ -31,7 +31,7 @@ public class ClusterConnectionCreate extends TestDataCreator<ClusterConnection> 
 
     private @Nullable SecretKeyRef withAdminSecretRef;
 
-    public ClusterConnectionCreate(
+    public GarageClusterConnectionCreate(
             int numberOfItems,
             Given given,
             KubernetesClient kubernetesClient,
@@ -44,11 +44,11 @@ public class ClusterConnectionCreate extends TestDataCreator<ClusterConnection> 
     }
 
     @Override
-    protected ClusterConnection create(int index) {
+    protected GarageClusterConnection create(int index) {
         var namespace = getNamespace();
         var name = getName();
 
-        var item = new ClusterConnection();
+        var item = new GarageClusterConnection();
 
         item.setMetadata(new ObjectMetaBuilder()
                 .withNamespace(namespace)
@@ -56,24 +56,24 @@ public class ClusterConnectionCreate extends TestDataCreator<ClusterConnection> 
                 .build()
         );
 
-        var spec = new ClusterConnectionSpec();
+        var spec = new GarageClusterConnectionSpec();
 
         spec.setAdminEndpoint(getAdminEndpoint());
         spec.setAdminSecretRef(getAdminSecretRef());
 
         item.setSpec(spec);
 
-        kubernetesClient.resources(ClusterConnection.class)
+        kubernetesClient.resources(GarageClusterConnection.class)
                 .inNamespace(namespace)
                 .resource(item)
                 .serverSideApply();
 
         //noinspection ConstantConditions
-        return kubernetesClient.resources(ClusterConnection.class)
+        return kubernetesClient.resources(GarageClusterConnection.class)
                 .inNamespace(namespace)
                 .withName(name)
                 .waitUntilCondition(
-                        clusterConnection -> clusterConnection != null && clusterConnection.getStatus() != null,
+                        garageClusterConnection -> garageClusterConnection != null && garageClusterConnection.getStatus() != null,
                         30,
                         TimeUnit.SECONDS
                 );
@@ -94,7 +94,7 @@ public class ClusterConnectionCreate extends TestDataCreator<ClusterConnection> 
             return withName;
         }
 
-        withName = randomKubernetesNameSuffix("test-cluster-connection");
+        withName = randomKubernetesNameSuffix("test-garage-cluster-connection");
 
         return withName;
     }

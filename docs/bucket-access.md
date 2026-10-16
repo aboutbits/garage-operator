@@ -24,11 +24,11 @@ spec:
 
 ## Spec
 
-| Field          | Type                                                 | Description                                                                                        | Required | Mutable |
-|----------------|------------------------------------------------------|----------------------------------------------------------------------------------------------------|----------|---------|
-| `bucketRef`    | [`ResourceRef`](#resourceref-bucketref-accesskeyref) | Reference to the `Bucket` resource.                                                                | Yes      | No      |
-| `accessKeyRef` | [`ResourceRef`](#resourceref-bucketref-accesskeyref) | Reference to the `AccessKey` resource. It must live on the same `ClusterConnection` as the bucket. | Yes      | No      |
-| `permissions`  | `array[string]`                                      | At least one of `read`, `write`, `owner`, see [Permissions](#permissions).                         | Yes      | Yes     |
+| Field          | Type                                                 | Description                                                                                              | Required | Mutable |
+|----------------|------------------------------------------------------|----------------------------------------------------------------------------------------------------------|----------|---------|
+| `bucketRef`    | [`ResourceRef`](#resourceref-bucketref-accesskeyref) | Reference to the `Bucket` resource.                                                                      | Yes      | No      |
+| `accessKeyRef` | [`ResourceRef`](#resourceref-bucketref-accesskeyref) | Reference to the `AccessKey` resource. It must live on the same `GarageClusterConnection` as the bucket. | Yes      | No      |
+| `permissions`  | `array[string]`                                      | At least one of `read`, `write`, `owner`, see [Permissions](#permissions).                               | Yes      | Yes     |
 
 ### ResourceRef (`bucketRef`, `accessKeyRef`)
 
@@ -48,7 +48,7 @@ What a reference resolves to can still change: a `Bucket` or `AccessKey` deleted
 
 Only one `BucketAccess` grants an `AccessKey` permissions on a given bucket: of all `BucketAccess`es for the same `Bucket` and `AccessKey` resources, in any namespace, the one that already holds the grant, otherwise the oldest one. Every other one reports `ERROR` and changes nothing, because two complete lists would overwrite each other at every reconcile. This also holds for two that are applied together. Deleting a refused one leaves the grant alone, and when the granting one is deleted, the next oldest takes over at its next retry.
 
-The admin token of the `ClusterConnection` needs access to the Admin API endpoints `ListBuckets`, `GetBucketInfo`, `AllowBucketKey` and `DenyBucketKey`, see [`ClusterConnection`](cluster-connection.md#spec).
+The admin token of the `GarageClusterConnection` needs access to the Admin API endpoints `ListBuckets`, `GetBucketInfo`, `AllowBucketKey` and `DenyBucketKey`, see [`GarageClusterConnection`](garage-cluster-connection.md#spec).
 
 ### Permissions
 
@@ -63,23 +63,23 @@ The list is the **complete desired state**. Removing `write` from the list revok
 
 ## Status
 
-| Field                                    | Description                                    |
-|------------------------------------------|------------------------------------------------|
-| `phase`                                  | `PENDING`, `READY`, `ERROR`, `DELETING`        |
-| `bucketId` / `accessKeyId`               | Backend identifiers the grant was made with.   |
-| `connectionNamespace` / `connectionName` | The `ClusterConnection` the grant was made on. |
-| `message`                                | Human-readable detail about the current state. |
+| Field                                    | Description                                          |
+|------------------------------------------|------------------------------------------------------|
+| `phase`                                  | `PENDING`, `READY`, `ERROR`, `DELETING`              |
+| `bucketId` / `accessKeyId`               | Backend identifiers the grant was made with.         |
+| `connectionNamespace` / `connectionName` | The `GarageClusterConnection` the grant was made on. |
+| `message`                                | Human-readable detail about the current state.       |
 
 The backend identifiers are recorded so the grant can still be revoked after the `Bucket` or
 `AccessKey` resource is gone — they are routinely deleted first.
 
-`ERROR` means that the last reconciliation failed, and `message` has the reason: for example the backend cannot be reached, another `BucketAccess` already grants the same pair, or the `Bucket` and the `AccessKey` live on different `ClusterConnection`s. The operator tries again every 60 seconds. For different `ClusterConnection`s, it tries again only when the `Bucket` or the `AccessKey` changes, or at the resync after 10 minutes.
+`ERROR` means that the last reconciliation failed, and `message` has the reason: for example the backend cannot be reached, another `BucketAccess` already grants the same pair, or the `Bucket` and the `AccessKey` live on different `GarageClusterConnection`s. The operator tries again every 60 seconds. For different `GarageClusterConnection`s, it tries again only when the `Bucket` or the `AccessKey` changes, or at the resync after 10 minutes.
 
 ## Dependencies
 
-A `BucketAccess` stays `PENDING` until its `Bucket`, its `AccessKey` and their `ClusterConnection` are all `READY`. It does not poll for that: the operator watches `Bucket` and `AccessKey` resources and reconciles a waiting grant **as soon as** the one it waits on changes. A 60 second retry remains as a safety net only.
+A `BucketAccess` stays `PENDING` until its `Bucket`, its `AccessKey` and their `GarageClusterConnection` are all `READY`. It does not poll for that: the operator watches `Bucket` and `AccessKey` resources and reconciles a waiting grant **as soon as** the one it waits on changes. A 60 second retry remains as a safety net only.
 
-The `Bucket` and the `AccessKey` must live on the **same `ClusterConnection`**. A grant between a bucket on one backend and a key on another is meaningless, so it is reported as `ERROR` rather than retried; changing either resource triggers a new attempt. A grant made earlier, before one of the two was recreated on another `ClusterConnection`, is revoked first, so the key does not keep access to the old bucket.
+The `Bucket` and the `AccessKey` must live on the **same `GarageClusterConnection`**. A grant between a bucket on one backend and a key on another is meaningless, so it is reported as `ERROR` rather than retried; changing either resource triggers a new attempt. A grant made earlier, before one of the two was recreated on another `GarageClusterConnection`, is revoked first, so the key does not keep access to the old bucket.
 
 References are resolved relative to the resource that holds them: a `Bucket`'s `connectionRef`
 without a namespace means the `Bucket`'s namespace, not the grant's.
@@ -90,7 +90,7 @@ Deleting a `BucketAccess` revokes every permission the key holds on the bucket.
 
 If the key or the bucket is already gone — deleting either one revokes its grants on the backend anyway — deletion completes without error. If nothing was ever granted, because the resource never left `PENDING`, deletion completes immediately.
 
-If the `ClusterConnection` the grant was made on is missing or not `READY`, the resource stays until it is back, and is retried every 60 seconds — except while the whole namespace is being deleted, where waiting for a connection that is being deleted too would block the namespace forever. The resource is then released without revoking the grant.
+If the `GarageClusterConnection` the grant was made on is missing or not `READY`, the resource stays until it is back, and is retried every 60 seconds — except while the whole namespace is being deleted, where waiting for a connection that is being deleted too would block the namespace forever. The resource is then released without revoking the grant.
 
 ## Using the credentials
 

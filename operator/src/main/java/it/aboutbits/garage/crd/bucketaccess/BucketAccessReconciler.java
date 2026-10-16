@@ -23,7 +23,7 @@ import it.aboutbits.garage.core.ResourceRef;
 import it.aboutbits.garage.core.adminapi.GarageService;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.bucket.Bucket;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
@@ -185,7 +185,7 @@ public class BucketAccessReconciler
             );
         }
 
-        // Different ClusterConnections is an ERROR no retry fixes; only a spec change (seen by the watches) does.
+        // Different GarageClusterConnections is an ERROR no retry fixes; only a spec change (seen by the watches) does.
         var bucketConnectionRef = bucketAccessService.qualify(
                 bucket.getSpec().getConnectionRef(),
                 bucket.getMetadata().getNamespace()
@@ -210,7 +210,7 @@ public class BucketAccessReconciler
             }
 
             status.updatePhase(CRPhase.ERROR)
-                    .setMessage("The Bucket and the AccessKey live on different ClusterConnections. Recreate one of them on the same ClusterConnection [bucket.connectionRef=%s/%s, accessKey.connectionRef=%s/%s]".formatted(
+                    .setMessage("The Bucket and the AccessKey live on different GarageClusterConnections. Recreate one of them on the same GarageClusterConnection [bucket.connectionRef=%s/%s, accessKey.connectionRef=%s/%s]".formatted(
                             bucketConnectionRef.getNamespace(),
                             bucketConnectionRef.getName(),
                             accessKeyConnectionRef.getNamespace(),
@@ -220,17 +220,17 @@ public class BucketAccessReconciler
             return UpdateControl.patchStatus(resource);
         }
 
-        var clusterConnectionOptional = getReferencedClusterConnection(
+        var garageClusterConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 bucketConnectionRef
         );
 
-        if (clusterConnectionOptional.isEmpty()) {
+        if (garageClusterConnectionOptional.isEmpty()) {
             return pending(
                     resource,
                     status,
-                    "The specified ClusterConnection does not exist or is not ready yet [bucket.connectionRef=%s/%s]".formatted(
+                    "The specified GarageClusterConnection does not exist or is not ready yet [bucket.connectionRef=%s/%s]".formatted(
                             bucketConnectionRef.getNamespace(),
                             bucketConnectionRef.getName()
                     )
@@ -251,7 +251,7 @@ public class BucketAccessReconciler
         return grant(
                 resource,
                 status,
-                clusterConnectionOptional.get(),
+                garageClusterConnectionOptional.get(),
                 bucketConnectionRef,
                 bucket.getStatus().getBucketId(),
                 accessKey.getStatus().getAccessKeyId()
@@ -298,17 +298,17 @@ public class BucketAccessReconciler
         connectionRef.setNamespace(status.getConnectionNamespace());
         connectionRef.setName(connectionName);
 
-        var clusterConnectionOptional = getReferencedClusterConnection(
+        var garageClusterConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 connectionRef
         );
 
-        if (clusterConnectionOptional.isEmpty()) {
+        if (garageClusterConnectionOptional.isEmpty()) {
             if (isNamespaceTerminating(kubernetesClient, resource)) {
                 // Release without backend cleanup, otherwise the namespace deletion hangs forever.
                 log.warn(
-                        "The namespace is being deleted and the ClusterConnection is gone, releasing the BucketAccess without revoking the grant on the backend [resource={}/{}, bucketId={}, accessKeyId={}]",
+                        "The namespace is being deleted and the GarageClusterConnection is gone, releasing the BucketAccess without revoking the grant on the backend [resource={}/{}, bucketId={}, accessKeyId={}]",
                         namespace,
                         name,
                         bucketId,
@@ -322,17 +322,17 @@ public class BucketAccessReconciler
                     resource,
                     status,
                     context,
-                    "The ClusterConnection the permissions were granted on no longer exists or is not ready yet [connection=%s/%s]".formatted(
+                    "The GarageClusterConnection the permissions were granted on no longer exists or is not ready yet [connection=%s/%s]".formatted(
                             getResourceNamespaceOrOwn(resource, connectionRef.getNamespace()),
                             connectionRef.getName()
                     )
             );
         }
 
-        var clusterConnection = clusterConnectionOptional.get();
+        var garageClusterConnection = garageClusterConnectionOptional.get();
 
         try {
-            garageService.revokeBucketKey(clusterConnection, bucketId, accessKeyId);
+            garageService.revokeBucketKey(garageClusterConnection, bucketId, accessKeyId);
 
             return DeleteControl.defaultDelete();
         } catch (Exception e) {
@@ -358,7 +358,7 @@ public class BucketAccessReconciler
     private UpdateControl<BucketAccess> grant(
             BucketAccess resource,
             BucketAccessStatus status,
-            ClusterConnection clusterConnection,
+            GarageClusterConnection garageClusterConnection,
             ResourceRef connectionRef,
             String bucketId,
             String accessKeyId
@@ -377,7 +377,7 @@ public class BucketAccessReconciler
                     .setConnectionName(connectionRef.getName());
 
             var desiredPermissions = bucketAccessService.desiredPermissions(resource.getSpec().getPermissions());
-            var currentPermissions = garageService.getBucketKeyPermissions(clusterConnection, bucketId, accessKeyId);
+            var currentPermissions = garageService.getBucketKeyPermissions(garageClusterConnection, bucketId, accessKeyId);
 
             String message = null;
 
@@ -391,7 +391,7 @@ public class BucketAccessReconciler
                 );
 
                 garageService.setBucketKeyPermissions(
-                        clusterConnection,
+                        garageClusterConnection,
                         bucketId,
                         accessKeyId,
                         desiredPermissions
@@ -453,7 +453,7 @@ public class BucketAccessReconciler
             return true;
         }
 
-        var previousConnectionOptional = getReferencedClusterConnection(
+        var previousConnectionOptional = getReferencedGarageClusterConnection(
                 kubernetesClient,
                 resource,
                 previousConnectionRef
@@ -561,7 +561,7 @@ public class BucketAccessReconciler
         return pending(
                 resource,
                 status,
-                "The previous grant cannot be revoked yet, because its ClusterConnection does not exist or is not ready [connection=%s/%s]".formatted(
+                "The previous grant cannot be revoked yet, because its GarageClusterConnection does not exist or is not ready [connection=%s/%s]".formatted(
                         status.getConnectionNamespace(),
                         status.getConnectionName()
                 )

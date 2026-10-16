@@ -5,7 +5,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -53,7 +53,7 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
     }
 
     /// An empty result means "not yet", not "broken": callers report [CRPhase#PENDING] and retry.
-    public Optional<ClusterConnection> getReferencedClusterConnection(
+    public Optional<GarageClusterConnection> getReferencedGarageClusterConnection(
             KubernetesClient kubernetesClient,
             CR resource,
             ResourceRef connectionRef
@@ -61,15 +61,15 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         var connectionName = connectionRef.getName();
         var connectionNamespace = getResourceNamespaceOrOwn(resource, connectionRef.getNamespace());
 
-        var clusterConnection = kubernetesClient.resources(ClusterConnection.class)
+        var garageClusterConnection = kubernetesClient.resources(GarageClusterConnection.class)
                 .inNamespace(connectionNamespace)
                 .withName(connectionName)
                 .get();
 
         //noinspection ConstantConditions
-        if (clusterConnection == null) {
+        if (garageClusterConnection == null) {
             log.error(
-                    "The specified ClusterConnection does not exist [spec.connectionRef={}/{}]",
+                    "The specified GarageClusterConnection does not exist [spec.connectionRef={}/{}]",
                     connectionNamespace,
                     connectionName
             );
@@ -77,13 +77,13 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
             return Optional.empty();
         }
 
-        var status = clusterConnection.getStatus();
+        var status = garageClusterConnection.getStatus();
 
         // No status yet means the connection has not been probed yet.
         //noinspection ConstantConditions
         if (status == null) {
             log.warn(
-                    "The specified ClusterConnection has not been probed yet [spec.connectionRef={}/{}]",
+                    "The specified GarageClusterConnection has not been probed yet [spec.connectionRef={}/{}]",
                     connectionNamespace,
                     connectionName
             );
@@ -96,7 +96,7 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
 
         if (!Objects.equals(currentPhase, expectedPhase)) {
             log.warn(
-                    "The specified ClusterConnection is not ready yet [spec.connectionRef={}/{}, status.phase={}]",
+                    "The specified GarageClusterConnection is not ready yet [spec.connectionRef={}/{}, status.phase={}]",
                     connectionNamespace,
                     connectionName,
                     currentPhase
@@ -106,22 +106,22 @@ public abstract class BaseReconciler<CR extends CustomResource<?, S> & Named, S 
         }
 
         // READY of an older generation says nothing about the current spec.
-        if (status.getObservedGeneration() != clusterConnection.getMetadata().getGeneration()) {
+        if (status.getObservedGeneration() != garageClusterConnection.getMetadata().getGeneration()) {
             log.warn(
-                    "The specified ClusterConnection changed and has not been probed again yet [spec.connectionRef={}/{}, status.observedGeneration={}, metadata.generation={}]",
+                    "The specified GarageClusterConnection changed and has not been probed again yet [spec.connectionRef={}/{}, status.observedGeneration={}, metadata.generation={}]",
                     connectionNamespace,
                     connectionName,
                     status.getObservedGeneration(),
-                    clusterConnection.getMetadata().getGeneration()
+                    garageClusterConnection.getMetadata().getGeneration()
             );
 
             return Optional.empty();
         }
 
-        return Optional.of(clusterConnection);
+        return Optional.of(garageClusterConnection);
     }
 
-    /// During namespace deletion the backend, its Secret and the [ClusterConnection] disappear at once,
+    /// During namespace deletion the backend, its Secret and the [GarageClusterConnection] disappear at once,
     /// so cleanup waiting for them would block the namespace in `Terminating` forever.
     public boolean isNamespaceTerminating(
             KubernetesClient kubernetesClient,

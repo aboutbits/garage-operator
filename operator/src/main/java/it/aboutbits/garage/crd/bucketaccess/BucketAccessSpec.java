@@ -21,7 +21,7 @@ public class BucketAccessSpec {
     )
     private ResourceRef bucketRef = new ResourceRef();
 
-    /// Must live on the same `ClusterConnection` as the bucket.
+    /// Must live on the same `GarageClusterConnection` as the bucket.
     @Required
     @ValidationRule(
             value = "self == oldSelf",

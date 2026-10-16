@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.clusterconnection;
+package it.aboutbits.garage.crd.garageclusterconnection;
 
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
@@ -34,17 +34,17 @@ import java.util.concurrent.TimeUnit;
 )
 @RequiredArgsConstructor
 @NullMarked
-public class ClusterConnectionReconciler
-        extends BaseReconciler<ClusterConnection, CRStatus>
-        implements Reconciler<ClusterConnection> {
+public class GarageClusterConnectionReconciler
+        extends BaseReconciler<GarageClusterConnection, CRStatus>
+        implements Reconciler<GarageClusterConnection> {
     private static final long UNAVAILABLE_RETRY_SECONDS = 30;
 
     private final GarageService garageService;
 
     @Override
-    public UpdateControl<ClusterConnection> reconcile(
-            ClusterConnection resource,
-            Context<ClusterConnection> context
+    public UpdateControl<GarageClusterConnection> reconcile(
+            GarageClusterConnection resource,
+            Context<GarageClusterConnection> context
     ) {
         var status = initializeStatus(resource);
 
@@ -52,7 +52,7 @@ public class ClusterConnectionReconciler
         var name = resource.getMetadata().getName();
 
         log.info(
-                "Reconciling ClusterConnection [resource={}/{}, status.phase={}]",
+                "Reconciling GarageClusterConnection [resource={}/{}, status.phase={}]",
                 namespace,
                 name,
                 status.getPhase()

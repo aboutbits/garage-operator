@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.clusterconnection;
+package it.aboutbits.garage.crd.garageclusterconnection;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.fabric8.crd.generator.annotation.AdditionalPrinterColumn;
@@ -40,8 +40,8 @@ import org.jspecify.annotations.NullMarked;
         type = AdditionalPrinterColumn.Type.DATE
 )
 @NullMarked
-public class ClusterConnection
-        extends CustomResource<ClusterConnectionSpec, CRStatus>
+public class GarageClusterConnection
+        extends CustomResource<GarageClusterConnectionSpec, CRStatus>
         implements Namespaced, Named {
     @Override
     @JsonIgnore

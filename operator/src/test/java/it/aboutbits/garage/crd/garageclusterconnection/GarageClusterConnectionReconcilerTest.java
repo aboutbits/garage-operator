@@ -1,4 +1,4 @@
-package it.aboutbits.garage.crd.clusterconnection;
+package it.aboutbits.garage.crd.garageclusterconnection;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
@@ -41,7 +41,7 @@ import static org.awaitility.Awaitility.await;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @RequiredArgsConstructor
 @NullMarked
-class ClusterConnectionReconcilerTest {
+class GarageClusterConnectionReconcilerTest {
     private final KubernetesClient kubernetesClient;
 
     private final Given given;
@@ -93,12 +93,12 @@ class ClusterConnectionReconcilerTest {
             given.appliedLayout();
 
             // when
-            var clusterConnection = given.one()
-                    .clusterConnection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.READY);
+            var reconciled = awaitPhase(kubernetesClient, garageClusterConnection, CRPhase.READY);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Garage cluster");
         }
@@ -116,13 +116,13 @@ class ClusterConnectionReconcilerTest {
                     .returnFirst();
 
             // when
-            var clusterConnection = given.one()
-                    .clusterConnection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             // then
-            awaitPhase(kubernetesClient, clusterConnection, CRPhase.READY);
+            awaitPhase(kubernetesClient, garageClusterConnection, CRPhase.READY);
         }
     }
 
@@ -138,13 +138,13 @@ class ClusterConnectionReconcilerTest {
                     .returnFirst();
 
             // when
-            var clusterConnection = given.one()
-                    .clusterConnection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageClusterConnection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage())
                     .startsWith("The Garage Admin API request failed [status=403, code=")
@@ -162,13 +162,13 @@ class ClusterConnectionReconcilerTest {
                     .returnFirst();
 
             // when
-            var clusterConnection = given.one()
-                    .clusterConnection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     .withAdminSecretRef(adminSecretRef)
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageClusterConnection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).contains("Secret reference not found");
         }
@@ -177,14 +177,14 @@ class ClusterConnectionReconcilerTest {
         @DisplayName("An unreachable admin endpoint should surface as an error")
         void unreachableEndpoint_setsErrorPhase() {
             // when
-            var clusterConnection = given.one()
-                    .clusterConnection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     // Reserved port that nothing listens on.
                     .withAdminEndpoint("http://localhost:1")
                     .returnFirst();
 
             // then
-            var reconciled = awaitPhase(kubernetesClient, clusterConnection, CRPhase.ERROR);
+            var reconciled = awaitPhase(kubernetesClient, garageClusterConnection, CRPhase.ERROR);
 
             assertThat(reconciled.getStatus().getMessage()).isNotBlank();
         }
@@ -200,7 +200,7 @@ class ClusterConnectionReconcilerTest {
             var thrown = catchThrowableOfType(
                     KubernetesClientException.class,
                     () -> given.one()
-                            .clusterConnection()
+                            .garageClusterConnection()
                             .withAdminEndpoint(adminEndpoint)
                             .returnFirst()
             );
@@ -214,16 +214,16 @@ class ClusterConnectionReconcilerTest {
         @DisplayName("Changing the admin endpoint should be rejected")
         void changedAdminEndpoint_isRejected() {
             // given
-            var clusterConnection = given.one()
-                    .clusterConnection()
+            var garageClusterConnection = given.one()
+                    .garageClusterConnection()
                     .returnFirst();
 
             // when
             var thrown = catchThrowableOfType(
                     KubernetesClientException.class,
-                    () -> kubernetesClient.resources(ClusterConnection.class)
-                            .inNamespace(clusterConnection.getMetadata().getNamespace())
-                            .withName(clusterConnection.getMetadata().getName())
+                    () -> kubernetesClient.resources(GarageClusterConnection.class)
+                            .inNamespace(garageClusterConnection.getMetadata().getNamespace())
+                            .withName(garageClusterConnection.getMetadata().getName())
                             .edit(item -> {
                                 item.getSpec().setAdminEndpoint("http://other-garage.acme.svc:3903");
                                 return item;

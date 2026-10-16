@@ -16,7 +16,7 @@ import it.aboutbits.garage.core.adminapi.dto.ApiBucketKeyPerm;
 import it.aboutbits.garage.core.adminapi.dto.GetBucketInfoKey;
 import it.aboutbits.garage.crd.accesskey.AccessKey;
 import it.aboutbits.garage.crd.bucket.Bucket;
-import it.aboutbits.garage.crd.clusterconnection.ClusterConnection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -162,15 +162,15 @@ class BucketAccessReconcilerTest {
 
     /// A second connection to the same Garage, without a second GarageCluster, which the operator refuses.
     private ResourceRef givenSecondConnection() {
-        var clusterConnection = awaitPhase(
+        var garageClusterConnection = awaitPhase(
                 kubernetesClient,
                 given.one()
-                        .clusterConnection()
+                        .garageClusterConnection()
                         .returnFirst(),
                 CRPhase.READY
         );
 
-        return ref(clusterConnection.getMetadata().getNamespace(), clusterConnection.getMetadata().getName());
+        return ref(garageClusterConnection.getMetadata().getNamespace(), garageClusterConnection.getMetadata().getName());
     }
 
     private BucketAccess createUnwaited(
@@ -625,7 +625,7 @@ class BucketAccessReconcilerTest {
         }
 
         @Test
-        @DisplayName("A Bucket and an AccessKey on different ClusterConnections should be refused")
+        @DisplayName("A Bucket and an AccessKey on different GarageClusterConnections should be refused")
         void differentConnections_areRefused() {
             // given
             var bucketConnectionRef = given.readyConnection();
@@ -645,7 +645,7 @@ class BucketAccessReconcilerTest {
             // then
             var reconciled = awaitPhase(kubernetesClient, bucketAccess, CRPhase.ERROR);
 
-            assertThat(reconciled.getStatus().getMessage()).contains("live on different ClusterConnections");
+            assertThat(reconciled.getStatus().getMessage()).contains("live on different GarageClusterConnections");
         }
 
         @Test
@@ -709,7 +709,7 @@ class BucketAccessReconcilerTest {
         }
 
         @Test
-        @DisplayName("A BucketAccess whose ClusterConnection is gone should wait for it, and revoke the grant once it is back")
+        @DisplayName("A BucketAccess whose GarageClusterConnection is gone should wait for it, and revoke the grant once it is back")
         void lostConnection_blocksDeletionUntilBack() {
             // given
             var connectionRef = given.readyConnection();
@@ -725,15 +725,15 @@ class BucketAccessReconcilerTest {
 
             var granted = awaitPhase(kubernetesClient, bucketAccess, CRPhase.READY);
 
-            var clusterConnection = kubernetesClient.resources(ClusterConnection.class)
+            var garageClusterConnection = kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName());
 
-            clusterConnection.delete();
+            garageClusterConnection.delete();
 
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .until(() -> clusterConnection.get() == null);
+                    .until(() -> garageClusterConnection.get() == null);
 
             var resource = kubernetesClient.resources(BucketAccess.class)
                     .inNamespace(bucketAccess.getMetadata().getNamespace())
@@ -758,13 +758,13 @@ class BucketAccessReconcilerTest {
 
             // when
             given.one()
-                    .clusterConnection()
+                    .garageClusterConnection()
                     .withNamespace(connectionRef.getNamespace())
                     .withName(connectionRef.getName())
                     .returnFirst();
 
             // then
-            // The BucketAccess does not watch its ClusterConnection, so only the retry of the cleanup notices it.
+            // The BucketAccess does not watch its GarageClusterConnection, so only the retry of the cleanup notices it.
             await().atMost(RETRY_SECONDS + AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
                     .until(() -> resource.get() == null);
@@ -809,7 +809,7 @@ class BucketAccessReconcilerTest {
     @Nested
     class Teardown {
         @Test
-        @DisplayName("Deleting a namespace whose ClusterConnection is already gone should not be blocked by its BucketAccesses")
+        @DisplayName("Deleting a namespace whose GarageClusterConnection is already gone should not be blocked by its BucketAccesses")
         void namespaceDeletion_isNotBlocked() {
             // given
             var namespace = TestDataCreator.randomKubernetesNameSuffix("test-teardown");
@@ -857,15 +857,15 @@ class BucketAccessReconcilerTest {
             // What namespace deletion does to a Garage installed in that namespace: the
             // connection goes away, independently of anything that depends on it. Waiting for it
             // keeps the AccessKey from deleting the key, and the grant with it, on the way out.
-            var clusterConnection = kubernetesClient.resources(ClusterConnection.class)
+            var garageClusterConnection = kubernetesClient.resources(GarageClusterConnection.class)
                     .inNamespace(namespace)
                     .withName(connectionRef.getName());
 
-            clusterConnection.delete();
+            garageClusterConnection.delete();
 
             await().atMost(AWAIT_SECONDS, TimeUnit.SECONDS)
                     .pollInterval(500, TimeUnit.MILLISECONDS)
-                    .until(() -> clusterConnection.get() == null);
+                    .until(() -> garageClusterConnection.get() == null);
 
             kubernetesClient.namespaces()
                     .withName(namespace)
@@ -956,7 +956,7 @@ class BucketAccessReconcilerTest {
         }
 
         @Test
-        @DisplayName("When the referenced Bucket is recreated on another ClusterConnection, the old grant should be revoked before the refusal")
+        @DisplayName("When the referenced Bucket is recreated on another GarageClusterConnection, the old grant should be revoked before the refusal")
         void bucketRecreatedOnOtherConnection_revokesGrant() {
             // given
             var connectionRef = given.readyConnection();
@@ -1011,7 +1011,7 @@ class BucketAccessReconcilerTest {
             // then
             var refused = awaitPhase(kubernetesClient, bucketAccess, CRPhase.ERROR);
 
-            assertThat(refused.getStatus().getMessage()).contains("live on different ClusterConnections");
+            assertThat(refused.getStatus().getMessage()).contains("live on different GarageClusterConnections");
             assertThat(refused.getStatus().getBucketId()).isNull();
             assertThat(refused.getStatus().getAccessKeyId()).isNull();
 
