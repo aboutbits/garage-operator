@@ -6,6 +6,7 @@ import org.jspecify.annotations.NullMarked;
 public final class Constants {
     public static final String CRD_GROUP = "garage.aboutbits.it";
     public static final String CRD_VERSION = "v1";
+    public static final String CRD_CATEGORY = "garage";
 
     private Constants() {
     }

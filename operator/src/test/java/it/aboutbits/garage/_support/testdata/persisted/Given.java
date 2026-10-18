@@ -1,9 +1,9 @@
 package it.aboutbits.garage._support.testdata.persisted;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
-import it.aboutbits.garage._support.testdata.persisted.creator.AccessKeyCreate;
-import it.aboutbits.garage._support.testdata.persisted.creator.BucketAccessCreate;
-import it.aboutbits.garage._support.testdata.persisted.creator.BucketCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageAccessKeyCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageBucketAccessCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageBucketCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterConnectionCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.SecretKeyRefCreate;
@@ -116,23 +116,23 @@ public class Given {
             );
         }
 
-        public AccessKeyCreate accessKey() {
-            return new AccessKeyCreate(
+        public GarageAccessKeyCreate accessKey() {
+            return new GarageAccessKeyCreate(
                     numberOfItems,
                     given,
                     kubernetesClient
             );
         }
 
-        public BucketAccessCreate bucketAccess() {
-            return new BucketAccessCreate(
+        public GarageBucketAccessCreate bucketAccess() {
+            return new GarageBucketAccessCreate(
                     numberOfItems,
                     kubernetesClient
             );
         }
 
-        public BucketCreate bucket() {
-            return new BucketCreate(
+        public GarageBucketCreate bucket() {
+            return new GarageBucketCreate(
                     numberOfItems,
                     given,
                     kubernetesClient

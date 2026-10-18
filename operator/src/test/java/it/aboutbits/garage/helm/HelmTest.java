@@ -48,12 +48,12 @@ class HelmTest {
     );
 
     /// Singular name (used for the reconciler's role binding) to plural name (used for the CRD
-    /// file). Spelled out rather than derived, because `bucketaccess` → `bucketaccesses` is not a
+    /// file). Spelled out rather than derived, because `garagebucketaccess` → `garagebucketaccesses` is not a
     /// plain `+ "s"`.
     private static final Map<String, String> CRD_NAMES = Map.of(
-            "accesskey", "accesskeys",
-            "bucket", "buckets",
-            "bucketaccess", "bucketaccesses",
+            "garageaccesskey", "garageaccesskeys",
+            "garagebucket", "garagebuckets",
+            "garagebucketaccess", "garagebucketaccesses",
             "garagecluster", "garageclusters",
             "garageclusterconnection", "garageclusterconnections"
     );

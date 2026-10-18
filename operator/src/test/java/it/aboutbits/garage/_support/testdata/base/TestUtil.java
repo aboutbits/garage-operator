@@ -5,9 +5,9 @@ import io.fabric8.kubernetes.client.CustomResource;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import it.aboutbits.garage.core.CRPhase;
 import it.aboutbits.garage.core.CRStatus;
-import it.aboutbits.garage.crd.accesskey.AccessKey;
-import it.aboutbits.garage.crd.bucket.Bucket;
-import it.aboutbits.garage.crd.bucketaccess.BucketAccess;
+import it.aboutbits.garage.crd.garageaccesskey.GarageAccessKey;
+import it.aboutbits.garage.crd.garagebucket.GarageBucket;
+import it.aboutbits.garage.crd.garagebucketaccess.GarageBucketAccess;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
 import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import org.jspecify.annotations.NullMarked;
@@ -22,9 +22,9 @@ public final class TestUtil {
 
     public static void resetEnvironment(KubernetesClient kubernetesClient) {
         // Reverse Dependency Deletion
-        deleteResource(kubernetesClient, BucketAccess.class);
-        deleteResource(kubernetesClient, AccessKey.class);
-        deleteResource(kubernetesClient, Bucket.class);
+        deleteResource(kubernetesClient, GarageBucketAccess.class);
+        deleteResource(kubernetesClient, GarageAccessKey.class);
+        deleteResource(kubernetesClient, GarageBucket.class);
         deleteResource(kubernetesClient, GarageClusterConnection.class);
         deleteResource(kubernetesClient, GarageCluster.class);
     }

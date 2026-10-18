@@ -27,11 +27,11 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 │  │ │ GarageCluster           │ │   │  ├──────────────────────────────────────┤  │ │
 │  │ │ GarageClusterConnection │ │   │  │  GarageClusterConnection Controller  │  │ │
 │  │ └─────────▲───────────────┘ │   │  ├──────────────────────────────────────┤  │ │
-│  │           │                 │   │  │          Bucket Controller           │  │ │
+│  │           │                 │   │  │       GarageBucket Controller        │  │ │
 │  │ ┌─────────┴───────────────┐ │   │  ├──────────────────────────────────────┤  │ │
-│  │ │ - Bucket                │ │   │  │         AccessKey Controller         │  │ │
-│  │ │ - AccessKey             │ │   │  ├──────────────────────────────────────┤  │ │
-│  │ │ - BucketAccess          │ │   │  │       BucketAccess Controller        │  │ │
+│  │ │ - GarageBucket          │ │   │  │      GarageAccessKey Controller      │  │ │
+│  │ │ - GarageAccessKey       │ │   │  ├──────────────────────────────────────┤  │ │
+│  │ │ - GarageBucketAccess    │ │   │  │    GarageBucketAccess Controller     │  │ │
 │  │ └─────────────────────────┘ │   │  └──────────────────────────────────────┘  │ │
 │  └─────────────────────────────┘   └─────────────────────┬──────────────────────┘ │
 │                                                          │                        │
@@ -46,11 +46,11 @@ The operator talks to Garage only through its [Admin API v2](https://garagehq.de
 
 The work is split with the Helm chart like this:
 
-| Concern                                                                                            | Owner                                                         |
-|----------------------------------------------------------------------------------------------------|---------------------------------------------------------------|
-| StatefulSet, volumes, `garage.toml`, the admin token, Services                                     | [Garage Helm chart](https://github.com/aboutbits/helm-garage) |
-| Cluster layout — with `garage.singleNode: false`, Garage serves no S3 traffic until one is applied | Operator, through `GarageCluster`                             |
-| Buckets, access keys, permissions                                                                  | Operator, through `Bucket`, `AccessKey` and `BucketAccess`    |
+| Concern                                                                                            | Owner                                                                        |
+|----------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| StatefulSet, volumes, `garage.toml`, the admin token, Services                                     | [Garage Helm chart](https://github.com/aboutbits/helm-garage)                |
+| Cluster layout — with `garage.singleNode: false`, Garage serves no S3 traffic until one is applied | Operator, through `GarageCluster`                                            |
+| Buckets, access keys, permissions                                                                  | Operator, through `GarageBucket`, `GarageAccessKey` and `GarageBucketAccess` |
 
 The chart's own `bootstrap` option (one bucket and one key on first boot) is a testing convenience. In production, leave it off and declare those as Custom Resources instead.
 
@@ -85,16 +85,16 @@ The chart ships a `README.md` and a `values.schema.json` with the complete list.
 #### Watching selected namespaces
 
 By default, every controller watches all namespaces. To restrict the operator to some of them, set the same comma-separated list for all five controllers — `GARAGECLUSTERRECONCILER`, `GARAGECLUSTERCONNECTIONRECONCILER`,
-`BUCKETRECONCILER`, `ACCESSKEYRECONCILER` and `BUCKETACCESSRECONCILER`:
+`GARAGEBUCKETRECONCILER`, `GARAGEACCESSKEYRECONCILER` and `GARAGEBUCKETACCESSRECONCILER`:
 
 ```yaml
 app:
   envs:
     QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGECLUSTERRECONCILER_NAMESPACES: acme,globex
     QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGECLUSTERCONNECTIONRECONCILER_NAMESPACES: acme,globex
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_BUCKETRECONCILER_NAMESPACES: acme,globex
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_ACCESSKEYRECONCILER_NAMESPACES: acme,globex
-    QUARKUS_OPERATOR_SDK_CONTROLLERS_BUCKETACCESSRECONCILER_NAMESPACES: acme,globex
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGEBUCKETRECONCILER_NAMESPACES: acme,globex
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGEACCESSKEYRECONCILER_NAMESPACES: acme,globex
+    QUARKUS_OPERATOR_SDK_CONTROLLERS_GARAGEBUCKETACCESSRECONCILER_NAMESPACES: acme,globex
 ```
 
 The RBAC the chart installs stays cluster-wide either way.
@@ -108,7 +108,7 @@ The RBAC the chart installs stays cluster-wide either way.
 # The release you are upgrading to.
 VERSION=0.1.0
 
-for crd in garageclusters garageclusterconnections buckets accesskeys bucketaccesses; do
+for crd in garageclusters garageclusterconnections garagebuckets garageaccesskeys garagebucketaccesses; do
   kubectl apply --server-side --force-conflicts \
     -f "https://github.com/aboutbits/garage-operator/releases/download/v${VERSION}/${crd}.garage.aboutbits.it-v1.yml"
 done
@@ -126,17 +126,17 @@ The operator Deployment uses the `Recreate` strategy, so there is a short gap wi
 The reasons:
 
 - The operator reads Secrets with its own, cluster-wide permissions. A `GarageClusterConnection` or `GarageCluster` may reference a Secret in any namespace and names the endpoint the token is sent to. Whoever can create one can therefore make the operator read a Secret they cannot read themselves and send it to an endpoint of their choice.
-- References may cross namespaces. A `BucketAccess` can grant a key access to a `Bucket` in another namespace, and a `Bucket` or `AccessKey` can use the `GarageClusterConnection` of another namespace. That is useful for a central Garage, and unsafe in the hands of tenants.
+- References may cross namespaces. A `GarageBucketAccess` can grant a key access to a `GarageBucket` in another namespace, and a `GarageBucket` or `GarageAccessKey` can use the `GarageClusterConnection` of another namespace. That is useful for a central Garage, and unsafe in the hands of tenants.
 
 What the operator itself is allowed to do:
 
-| Resource                | Verbs                                               | Why                                                                    |
-|-------------------------|-----------------------------------------------------|------------------------------------------------------------------------|
-| `garage.aboutbits.it/*` | all                                                 | Its own Custom Resources, their status and finalizers.                 |
-| `secrets`               | `get`, `list`, `watch`, `create`, `update`, `patch` | Reading admin tokens; writing the credentials Secrets of `AccessKey`s. |
-| `namespaces`            | `get`                                               | Recognizing a namespace that is being deleted.                         |
+| Resource                | Verbs                                               | Why                                                                          |
+|-------------------------|-----------------------------------------------------|------------------------------------------------------------------------------|
+| `garage.aboutbits.it/*` | all                                                 | Its own Custom Resources, their status and finalizers.                       |
+| `secrets`               | `get`, `list`, `watch`, `create`, `update`, `patch` | Reading admin tokens; writing the credentials Secrets of `GarageAccessKey`s. |
+| `namespaces`            | `get`                                               | Recognizing a namespace that is being deleted.                               |
 
-The secret half of an access key only ever ends up in the `AccessKey`'s own Secret, never in a status or a log line.
+The secret half of an access key only ever ends up in the `GarageAccessKey`'s own Secret, never in a status or a log line.
 
 The Garage Admin API is plain HTTP inside the cluster by default, so the admin token crosses the Pod network unencrypted. If that matters in your cluster, put the Admin API behind TLS and use an `https://` endpoint, or restrict access to port 3903 with a NetworkPolicy.
 
@@ -146,9 +146,9 @@ Further documentation of each Custom Resource can be found here:
 
 - [GarageCluster](docs/garage-cluster.md) – Bootstrap and converge the cluster layout of a Garage installation.
 - [GarageClusterConnection](docs/garage-cluster-connection.md) – Define the backend everything else lives on.
-- [Bucket](docs/bucket.md) – Manage buckets, their quotas and what happens when they are deleted.
-- [AccessKey](docs/access-key.md) – Manage access keys, with their credentials written to a Secret.
-- [BucketAccess](docs/bucket-access.md) – Grant an access key `read`, `write` or `owner` on a bucket.
+- [GarageBucket](docs/garage-bucket.md) – Manage buckets, their quotas and what happens when they are deleted.
+- [GarageAccessKey](docs/garage-access-key.md) – Manage access keys, with their credentials written to a Secret.
+- [GarageBucketAccess](docs/garage-bucket-access.md) – Grant an access key `read`, `write` or `owner` on a bucket.
 
 All resources live in the API group `garage.aboutbits.it`, version `v1`, and are namespaced.
 
@@ -190,7 +190,7 @@ spec:
 # Create a bucket.
 ---
 apiVersion: garage.aboutbits.it/v1
-kind: Bucket
+kind: GarageBucket
 metadata:
   namespace: acme
   name: acme-uploads
@@ -205,7 +205,7 @@ spec:
 # Create an access key. The credentials are written to the Secret `acme-app-s3`.
 ---
 apiVersion: garage.aboutbits.it/v1
-kind: AccessKey
+kind: GarageAccessKey
 metadata:
   namespace: acme
   name: acme-app
@@ -218,7 +218,7 @@ spec:
 # Let the key read and write the bucket.
 ---
 apiVersion: garage.aboutbits.it/v1
-kind: BucketAccess
+kind: GarageBucketAccess
 metadata:
   namespace: acme
   name: acme-app-uploads
@@ -252,10 +252,10 @@ Garage addresses buckets by path, so clients need path-style access enabled (`fo
 
 ### Status
 
-Every resource reports a `phase` and a `message`, which `kubectl get` shows as columns:
+Every resource reports a `phase` and a `message`, which `kubectl get` shows as columns. All five kinds are in the category `garage`, so one command lists them all:
 
 ```bash
-kubectl get garageclusters,garageclusterconnections,buckets,accesskeys,bucketaccesses --all-namespaces
+kubectl get garage --all-namespaces
 ```
 
 | Phase      | Meaning                                                                                                        |
@@ -266,14 +266,14 @@ kubectl get garageclusters,garageclusterconnections,buckets,accesskeys,bucketacc
 | `DELETING` | Cleanup on the backend is in progress, or blocked — again, see the `message`.                                  |
 
 Resources depend on each other in this order, and each one waits for the one before it to be `READY`:
-`GarageCluster` → `GarageClusterConnection` → `Bucket` and `AccessKey` → `BucketAccess`. Everything can be applied at once; it settles on its own.
+`GarageCluster` → `GarageClusterConnection` → `GarageBucket` and `GarageAccessKey` → `GarageBucketAccess`. Everything can be applied at once; it settles on its own.
 
 ### Drift
 
 The operator reconciles every resource at least every 10 minutes, even when nothing changed in Kubernetes. A bucket or key deleted by hand in Garage is recreated, changed quotas or permissions are put back, and an
 `GarageClusterConnection` whose backend went down leaves `READY`.
 
-The credentials Secret of an `AccessKey` is watched directly: deleted or edited, it is written again within seconds, with the same credentials.
+The credentials Secret of a `GarageAccessKey` is watched directly: deleted or edited, it is written again within seconds, with the same credentials.
 
 ### Deleting resources
 
@@ -281,21 +281,21 @@ The credentials Secret of an `AccessKey` is watched directly: deleted or edited,
 |---------------------------|----------------------------------------------------------------------------------------------------|
 | `GarageCluster`           | Only removes the operator's record of the cluster. The layout and the data stay.                   |
 | `GarageClusterConnection` | Removes the connection. Delete it **last**: deleting the resources on it needs it.                 |
-| `Bucket`                  | `Retain` (default) keeps the bucket. `Delete` deletes it — but never one that still holds objects. |
-| `AccessKey`               | Always deletes the key, and with it every grant it held. The Secret goes too.                      |
-| `BucketAccess`            | Revokes the key's permissions on the bucket.                                                       |
+| `GarageBucket`            | `Retain` (default) keeps the bucket. `Delete` deletes it — but never one that still holds objects. |
+| `GarageAccessKey`         | Always deletes the key, and with it every grant it held. The Secret goes too.                      |
+| `GarageBucketAccess`      | Revokes the key's permissions on the bucket.                                                       |
 
 A resource whose backend cleanup cannot proceed keeps its finalizer and says why in its `message`, rather than silently leaving something behind.
 
 ### Offboarding a namespace
 
-The safest way to remove a customer is to delete their `Bucket`, `AccessKey` and `BucketAccess` resources first — `terraform destroy` does this in dependency order — and the namespace afterwards.
+The safest way to remove a customer is to delete their `GarageBucket`, `GarageAccessKey` and `GarageBucketAccess` resources first — `terraform destroy` does this in dependency order — and the namespace afterwards.
 
 Deleting the namespace right away works too. When Garage is installed in that namespace, Garage, its admin Secret and the `GarageClusterConnection` disappear at the same time as everything else, and waiting for them would keep the namespace in `Terminating` forever. So once a namespace is being deleted and its `GarageClusterConnection` is missing or not `READY`, the operator releases the remaining resources without cleaning up on the backend. If the backend lives in another namespace, the keys, buckets and grants of the deleted namespace then stay there and have to be removed in Garage by hand.
 
 ### Rotating credentials
 
-There is no rotation trigger yet. Delete the `AccessKey` and apply it again: Garage issues a new key, the operator writes it to the Secret, and every `BucketAccess` for it grants the new key. Applications have to pick up the changed Secret, typically through a restart. See [AccessKey](docs/access-key.md#rotation).
+There is no rotation trigger yet. Delete the `GarageAccessKey` and apply it again: Garage issues a new key, the operator writes it to the Secret, and every `GarageBucketAccess` for it grants the new key. Applications have to pick up the changed Secret, typically through a restart. See [GarageAccessKey](docs/garage-access-key.md#rotation).
 
 ### A single replica
 

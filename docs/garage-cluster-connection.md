@@ -14,7 +14,7 @@ For Garage the two are siblings, not alternatives:
 | `GarageClusterConnection`            | Can I administer object storage on this backend right now?  |
 
 A connection only reports `READY` when the backend can actually serve requests. A Garage node that answers its Admin API but has no layout reports health `unavailable`, and the connection stays
-`PENDING` with a message pointing at the `GarageCluster`. Because [`Bucket`](bucket.md) and key resources gate on their connection being `READY`, that one check keeps them from acting against a cluster that is not finished bootstrapping.
+`PENDING` with a message pointing at the `GarageCluster`. Because [`GarageBucket`](garage-bucket.md) and key resources gate on their connection being `READY`, that one check keeps them from acting against a cluster that is not finished bootstrapping.
 
 Both resources reference the same admin endpoint and Secret. That duplication is deliberate — each is self-contained, and a backend the operator only *uses* does not need a `GarageCluster` at all.
 
@@ -52,12 +52,12 @@ spec:
 
 The token needs access to these Admin API endpoints:
 
-| Used by                            | Endpoints                                                                      |
-|------------------------------------|--------------------------------------------------------------------------------|
-| `GarageClusterConnection`          | `GetClusterHealth`                                                             |
-| [`Bucket`](bucket.md)              | `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket`, `DeleteBucket` |
-| [`AccessKey`](access-key.md)       | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
-| [`BucketAccess`](bucket-access.md) | `ListBuckets`, `GetBucketInfo`, `AllowBucketKey`, `DenyBucketKey`              |
+| Used by                                         | Endpoints                                                                      |
+|-------------------------------------------------|--------------------------------------------------------------------------------|
+| `GarageClusterConnection`                       | `GetClusterHealth`                                                             |
+| [`GarageBucket`](garage-bucket.md)              | `ListBuckets`, `GetBucketInfo`, `CreateBucket`, `UpdateBucket`, `DeleteBucket` |
+| [`GarageAccessKey`](garage-access-key.md)       | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
+| [`GarageBucketAccess`](garage-bucket-access.md) | `ListBuckets`, `GetBucketInfo`, `AllowBucketKey`, `DenyBucketKey`              |
 
 The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 

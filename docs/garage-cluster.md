@@ -8,7 +8,7 @@ A Garage node started without `--single-node` knows about itself but has no role
 
 By default the [AboutBits Garage Helm chart](https://github.com/aboutbits/helm-garage) starts Garage with `--single-node`. Garage then creates the layout itself, and refuses to start once the layout version is higher than 1. A `GarageCluster` applies a new layout version as soon as its spec differs from the role of the node, so with `--single-node` the next restart of the Garage Pod fails for good.
 
-Install the chart with `garage.singleNode: false` to manage the layout with a `GarageCluster`. Without a `GarageCluster`, keep the default: Garage creates its own layout, and [`GarageClusterConnection`](garage-cluster-connection.md), `Bucket` and `AccessKey` work the same. The chart's `bootstrap` option needs single-node mode, so with `garage.singleNode: false` create the bucket and the key with a `Bucket` and an `AccessKey` instead.
+Install the chart with `garage.singleNode: false` to manage the layout with a `GarageCluster`. Without a `GarageCluster`, keep the default: Garage creates its own layout, and [`GarageClusterConnection`](garage-cluster-connection.md), `GarageBucket` and `GarageAccessKey` work the same. The chart's `bootstrap` option needs single-node mode, so with `garage.singleNode: false` create the bucket and the key with a `GarageBucket` and a `GarageAccessKey` instead.
 
 The operator cannot see how Garage was started, so it cannot refuse a `GarageCluster` for a Garage in single-node mode.
 

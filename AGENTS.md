@@ -36,8 +36,8 @@ When in doubt about a pattern, look there first.
 ## 🚀 Project Overview
 
 - **Stack**: Java 25, Quarkus, the Quarkus Operator SDK and the fabric8 Kubernetes client.
-- **Custom Resources** (`garage.aboutbits.it/v1`): `GarageCluster`, `GarageClusterConnection`, `Bucket`, `AccessKey` and
-  `BucketAccess`, one package each under `operator/src/main/java/it/aboutbits/garage/crd`, and one page each in
+- **Custom Resources** (`garage.aboutbits.it/v1`): `GarageCluster`, `GarageClusterConnection`, `GarageBucket`, `GarageAccessKey` and
+  `GarageBucketAccess`, one package each under `operator/src/main/java/it/aboutbits/garage/crd`, and one page each in
   [`docs/`](./docs).
 - **Generated artifacts**: the CRDs and the Helm chart are generated from the code at build time, into
   `operator/build/kubernetes` and `operator/build/helm`. Change the Java classes or `application.yml`, never the output.
