@@ -24,6 +24,8 @@ public class GarageClusterSpec {
     @Required
     private SecretKeyRef adminSecretRef = new SecretKeyRef();
 
+    /// The role a storage node gets, not the whole layout: Garage keeps one layout per cluster with a role per node.
+    /// Per-node differences, such as zones or gateway nodes, belong in optional additions.
     @Required
     private GarageClusterLayoutSpec layout = new GarageClusterLayoutSpec();
 }

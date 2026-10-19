@@ -22,6 +22,8 @@ Once the layout is applied, a [`GarageClusterConnection`](garage-cluster-connect
 
 This version manages **single-node clusters**, which is what the Helm chart deploys (`replication_factor = 1`, no clustering or node discovery). If the cluster reports more than one node, the operator refuses to touch the layout and reports `ERROR` rather than guessing a zone and capacity per node.
 
+Garage keeps one layout per cluster, with a role per node. `spec.layout` is the role that a storage node gets, so on a single node it is the whole layout. On a cluster of identical nodes in one zone, the same role would apply to every node. What only a larger cluster needs, such as a different zone or capacity per node, gateway nodes without capacity, or the zone redundancy of the layout, would be optional additions, and existing `GarageCluster`s would stay valid.
+
 Only one `GarageCluster` manages a Garage node. A second `GarageCluster` for the same node, in any namespace, reports `ERROR` and leaves the layout alone. Otherwise two resources with different layouts would apply their roles in turn, a new layout version at every reconcile. The node is recognized by its id, so two spellings of the same `adminEndpoint` count as the same Garage. When the first `GarageCluster` is deleted, the second one takes over at its next retry.
 
 Deleting a `GarageCluster` removes the operator's record of the cluster. It does **not** tear the storage cluster down: removing a node's role would trigger a rebalance and, on a single-node cluster, discard the data. There is therefore no reclaim policy on this resource.
@@ -52,7 +54,7 @@ spec:
 |------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|---------|
 | `adminEndpoint`  | `string`                                                     | Base URL of the Garage Admin API, port 3903. The chart puts it on the same Service as the S3 API. Keep `service.type: ClusterIP`, because another type also makes the Admin API reachable from outside the cluster. | Yes      | Yes     |
 | `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref)               | Reference to the `Opaque` Secret holding the Admin API bearer token. The chart creates one named after the release.                                                                                                 | Yes      | Yes     |
-| `layout`         | [`GarageClusterLayoutSpec`](#garageclusterlayoutspec-layout) | The role of the node in the cluster layout.                                                                                                                                                                         | Yes      | Yes     |
+| `layout`         | [`GarageClusterLayoutSpec`](#garageclusterlayoutspec-layout) | The role a storage node gets in the cluster layout, see [Scope](#scope).                                                                                                                                            | Yes      | Yes     |
 
 ### SecretKeyRef (`adminSecretRef`)
 
