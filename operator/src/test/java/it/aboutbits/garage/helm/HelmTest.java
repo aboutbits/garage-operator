@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.api.model.ConfigBuilder;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeMount;
+import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinition;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.utils.Serialization;
@@ -159,10 +160,22 @@ class HelmTest {
 
         // ./crds/
         for (var crdPlural : CRD_NAMES.values()) {
-            assertThat(chartPath.resolve("crds/%s.%s-v1.yml".formatted(
+            var crdPath = chartPath.resolve("crds/%s.%s-v1.yml".formatted(
                     crdPlural,
                     Constants.CRD_GROUP
-            ))).exists();
+            ));
+
+            assertThat(crdPath).exists();
+
+            // The README promises that `kubectl get garage` lists every kind.
+            var crd = serialization.unmarshal(
+                    Files.newInputStream(crdPath),
+                    CustomResourceDefinition.class
+            );
+
+            assertThat(crd.getSpec().getNames().getCategories())
+                    .withFailMessage("%s should be in the category %s", crdPlural, Constants.CRD_CATEGORY)
+                    .containsExactly(Constants.CRD_CATEGORY);
         }
 
         // ./templates/
