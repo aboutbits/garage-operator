@@ -59,7 +59,7 @@ The chart's own `bootstrap` option (one bucket and one key on first boot) is a t
 ### Helm Chart
 
 ```bash
-helm install garage-operator https://github.com/aboutbits/garage-operator/releases/download/v0.1.0/garage-operator-0.1.0.tgz
+helm install garage-operator https://github.com/aboutbits/garage-operator/releases/download/v0.2.0/garage-operator-0.2.0.tgz
 ```
 
 With the Helm chart, the Custom Resource Definitions (CRDs) are installed automatically on the first install. However, if you deploy the operator directly from the OCI image, the CRDs are not automatically applied and must be installed separately. The CRD manifests are attached to every
