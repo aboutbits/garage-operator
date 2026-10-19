@@ -1,11 +1,11 @@
 package it.aboutbits.garage._support.testdata.persisted;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
-import it.aboutbits.garage._support.testdata.persisted.creator.AccessKeyCreate;
-import it.aboutbits.garage._support.testdata.persisted.creator.BucketAccessCreate;
-import it.aboutbits.garage._support.testdata.persisted.creator.BucketCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageAccessKeyCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageBucketAccessCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageBucketCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterCreate;
-import it.aboutbits.garage._support.testdata.persisted.creator.S3ConnectionCreate;
+import it.aboutbits.garage._support.testdata.persisted.creator.GarageClusterConnectionCreate;
 import it.aboutbits.garage._support.testdata.persisted.creator.SecretKeyRefCreate;
 import it.aboutbits.garage.core.CRPhase;
 import it.aboutbits.garage.core.ResourceRef;
@@ -55,17 +55,17 @@ public class Given {
     public ResourceRef readyConnection(String namespace) {
         appliedLayout();
 
-        var s3Connection = one()
-                .s3Connection()
+        var garageClusterConnection = one()
+                .garageClusterConnection()
                 .withNamespace(namespace)
                 .returnFirst();
 
-        awaitPhase(kubernetesClient, s3Connection, CRPhase.READY);
+        awaitPhase(kubernetesClient, garageClusterConnection, CRPhase.READY);
 
         var connectionRef = new ResourceRef();
 
-        connectionRef.setNamespace(s3Connection.getMetadata().getNamespace());
-        connectionRef.setName(s3Connection.getMetadata().getName());
+        connectionRef.setNamespace(garageClusterConnection.getMetadata().getNamespace());
+        connectionRef.setName(garageClusterConnection.getMetadata().getName());
 
         return connectionRef;
     }
@@ -116,31 +116,31 @@ public class Given {
             );
         }
 
-        public AccessKeyCreate accessKey() {
-            return new AccessKeyCreate(
+        public GarageAccessKeyCreate accessKey() {
+            return new GarageAccessKeyCreate(
                     numberOfItems,
                     given,
                     kubernetesClient
             );
         }
 
-        public BucketAccessCreate bucketAccess() {
-            return new BucketAccessCreate(
+        public GarageBucketAccessCreate bucketAccess() {
+            return new GarageBucketAccessCreate(
                     numberOfItems,
                     kubernetesClient
             );
         }
 
-        public BucketCreate bucket() {
-            return new BucketCreate(
+        public GarageBucketCreate bucket() {
+            return new GarageBucketCreate(
                     numberOfItems,
                     given,
                     kubernetesClient
             );
         }
 
-        public S3ConnectionCreate s3Connection() {
-            return new S3ConnectionCreate(
+        public GarageClusterConnectionCreate garageClusterConnection() {
+            return new GarageClusterConnectionCreate(
                     numberOfItems,
                     given,
                     kubernetesClient,

@@ -1,0 +1,167 @@
+package it.aboutbits.garage._support.testdata.persisted.creator;
+
+import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import it.aboutbits.garage._support.testdata.base.TestDataCreator;
+import it.aboutbits.garage._support.testdata.persisted.Given;
+import it.aboutbits.garage.core.ReclaimPolicy;
+import it.aboutbits.garage.core.ResourceRef;
+import it.aboutbits.garage.crd.garagebucket.GarageBucket;
+import it.aboutbits.garage.crd.garagebucket.GarageBucketQuotasSpec;
+import it.aboutbits.garage.crd.garagebucket.GarageBucketSpec;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
+
+import java.util.concurrent.TimeUnit;
+
+@Setter
+@Accessors(fluent = true, chain = true)
+@NullMarked
+public class GarageBucketCreate extends TestDataCreator<GarageBucket> {
+    private final Given given;
+
+    private final KubernetesClient kubernetesClient;
+
+    private @Nullable String withNamespace;
+
+    private @Nullable String withName;
+
+    private @Nullable String withBucketName;
+
+    private @Nullable ResourceRef withConnectionRef;
+
+    private @Nullable ReclaimPolicy withReclaimPolicy;
+
+    private @Nullable String withMaxSize;
+
+    private @Nullable Long withMaxObjects;
+
+    public GarageBucketCreate(
+            int numberOfItems,
+            Given given,
+            KubernetesClient kubernetesClient
+    ) {
+        super(numberOfItems);
+        this.given = given;
+        this.kubernetesClient = kubernetesClient;
+    }
+
+    /// Leave the quotas section out of the spec entirely.
+    public GarageBucketCreate withoutQuotas() {
+        this.withMaxSize = null;
+        this.withMaxObjects = null;
+        return this;
+    }
+
+    @Override
+    protected GarageBucket create(int index) {
+        var namespace = getNamespace();
+        var name = getName();
+
+        var item = new GarageBucket();
+
+        item.setMetadata(new ObjectMetaBuilder()
+                .withNamespace(namespace)
+                .withName(name)
+                .build()
+        );
+
+        var spec = new GarageBucketSpec();
+
+        spec.setConnectionRef(getConnectionRef());
+        spec.setName(getBucketName());
+        spec.setReclaimPolicy(getReclaimPolicy());
+        spec.setQuotas(getQuotas());
+
+        item.setSpec(spec);
+
+        kubernetesClient.resources(GarageBucket.class)
+                .inNamespace(namespace)
+                .resource(item)
+                .serverSideApply();
+
+        //noinspection ConstantConditions
+        return kubernetesClient.resources(GarageBucket.class)
+                .inNamespace(namespace)
+                .withName(name)
+                .waitUntilCondition(
+                        bucket -> bucket != null && bucket.getStatus() != null,
+                        30,
+                        TimeUnit.SECONDS
+                );
+    }
+
+    private String getNamespace() {
+        if (withNamespace != null) {
+            return withNamespace;
+        }
+
+        withNamespace = kubernetesClient.getNamespace();
+
+        return withNamespace;
+    }
+
+    private String getName() {
+        if (withName != null) {
+            return withName;
+        }
+
+        withName = randomKubernetesNameSuffix("test-bucket");
+
+        return withName;
+    }
+
+    private String getBucketName() {
+        if (withBucketName != null) {
+            return withBucketName;
+        }
+
+        withBucketName = randomKubernetesNameSuffix("test-bucket");
+
+        return withBucketName;
+    }
+
+    private ResourceRef getConnectionRef() {
+        if (withConnectionRef != null) {
+            return withConnectionRef;
+        }
+
+        var garageClusterConnection = given.one()
+                .garageClusterConnection()
+                .returnFirst();
+
+        var connectionRef = new ResourceRef();
+
+        connectionRef.setNamespace(garageClusterConnection.getMetadata().getNamespace());
+        connectionRef.setName(garageClusterConnection.getMetadata().getName());
+
+        withConnectionRef = connectionRef;
+
+        return withConnectionRef;
+    }
+
+    private ReclaimPolicy getReclaimPolicy() {
+        if (withReclaimPolicy != null) {
+            return withReclaimPolicy;
+        }
+
+        withReclaimPolicy = ReclaimPolicy.RETAIN;
+
+        return withReclaimPolicy;
+    }
+
+    private @Nullable GarageBucketQuotasSpec getQuotas() {
+        if (withMaxSize == null && withMaxObjects == null) {
+            return null;
+        }
+
+        var quotas = new GarageBucketQuotasSpec();
+
+        quotas.setMaxSize(withMaxSize);
+        quotas.setMaxObjects(withMaxObjects);
+
+        return quotas;
+    }
+}

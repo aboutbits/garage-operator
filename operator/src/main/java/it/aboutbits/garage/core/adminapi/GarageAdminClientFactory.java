@@ -5,7 +5,7 @@ import io.quarkus.rest.client.reactive.QuarkusRestClientBuilder;
 import it.aboutbits.garage.core.KubernetesService;
 import it.aboutbits.garage.core.SecretKeyRef;
 import it.aboutbits.garage.crd.garagecluster.GarageCluster;
-import it.aboutbits.garage.crd.s3connection.S3Connection;
+import it.aboutbits.garage.crd.garageclusterconnection.GarageClusterConnection;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import lombok.RequiredArgsConstructor;
@@ -46,13 +46,13 @@ public class GarageAdminClientFactory {
         );
     }
 
-    public GarageAdminApi create(S3Connection s3Connection) {
-        var spec = s3Connection.getSpec();
+    public GarageAdminApi create(GarageClusterConnection garageClusterConnection) {
+        var spec = garageClusterConnection.getSpec();
 
         return create(
                 spec.getAdminEndpoint(),
                 spec.getAdminSecretRef(),
-                s3Connection.getMetadata().getNamespace()
+                garageClusterConnection.getMetadata().getNamespace()
         );
     }
 

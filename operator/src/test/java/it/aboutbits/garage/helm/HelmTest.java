@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.api.model.ConfigBuilder;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeMount;
+import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinition;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.utils.Serialization;
@@ -48,14 +49,14 @@ class HelmTest {
     );
 
     /// Singular name (used for the reconciler's role binding) to plural name (used for the CRD
-    /// file). Spelled out rather than derived, because `bucketaccess` → `bucketaccesses` is not a
+    /// file). Spelled out rather than derived, because `garagebucketaccess` → `garagebucketaccesses` is not a
     /// plain `+ "s"`.
     private static final Map<String, String> CRD_NAMES = Map.of(
-            "accesskey", "accesskeys",
-            "bucket", "buckets",
-            "bucketaccess", "bucketaccesses",
+            "garageaccesskey", "garageaccesskeys",
+            "garagebucket", "garagebuckets",
+            "garagebucketaccess", "garagebucketaccesses",
             "garagecluster", "garageclusters",
-            "s3connection", "s3connections"
+            "garageclusterconnection", "garageclusterconnections"
     );
 
     private final String chartName;
@@ -159,10 +160,22 @@ class HelmTest {
 
         // ./crds/
         for (var crdPlural : CRD_NAMES.values()) {
-            assertThat(chartPath.resolve("crds/%s.%s-v1.yml".formatted(
+            var crdPath = chartPath.resolve("crds/%s.%s-v1.yml".formatted(
                     crdPlural,
                     Constants.CRD_GROUP
-            ))).exists();
+            ));
+
+            assertThat(crdPath).exists();
+
+            // The README promises that `kubectl get garage` lists every kind.
+            var crd = serialization.unmarshal(
+                    Files.newInputStream(crdPath),
+                    CustomResourceDefinition.class
+            );
+
+            assertThat(crd.getSpec().getNames().getCategories())
+                    .withFailMessage("%s should be in the category %s", crdPlural, Constants.CRD_CATEGORY)
+                    .containsExactly(Constants.CRD_CATEGORY);
         }
 
         // ./templates/
