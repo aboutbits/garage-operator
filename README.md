@@ -154,7 +154,7 @@ All resources live in the API group `garage.aboutbits.it`, version `v1`, and are
 
 ### Showcase
 
-The following example sets up a Garage installed with the AboutBits Helm chart and `garage.singleNode: false` as release `acme` in the namespace `acme`, and gives an application read and write access to one bucket. The chart names its Services and its admin Secret after the release, so the admin API is `acme-garage:3903`, S3 is `acme-garage:3900`, and the token is the `admin_token` key of the Secret `acme-garage`.
+The following example sets up a Garage installed with the AboutBits Helm chart and `garage.singleNode: false` as release `acme` in the namespace `acme`, and gives an application read and write access to one bucket. The chart names its Services after the release, so the admin API is `acme-garage:3903` and S3 is `acme-garage:3900`. The chart does not create the admin token: it reads it from a Secret that a secret manager such as the 1Password operator creates, here `acme-garage-admin` with the key `GARAGE_ADMIN_TOKEN`, set as `admin.existingSecret.name` of the chart.
 
 ```yaml
 # Assign the cluster layout. With `garage.singleNode: false`, Garage serves no S3 traffic until this is done.
@@ -167,8 +167,8 @@ metadata:
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
-    name: acme-garage
-    key: admin_token
+    name: acme-garage-admin
+    key: GARAGE_ADMIN_TOKEN
   layout:
     zone: default
     # Should match the size of the chart's data volume.
@@ -184,8 +184,8 @@ metadata:
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
-    name: acme-garage
-    key: admin_token
+    name: acme-garage-admin
+    key: GARAGE_ADMIN_TOKEN
 
 # Create a bucket.
 ---

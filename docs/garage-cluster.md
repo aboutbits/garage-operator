@@ -39,8 +39,8 @@ metadata:
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
-    name: acme-garage
-    key: admin_token
+    name: acme-garage-admin
+    key: GARAGE_ADMIN_TOKEN
   layout:
     zone: default
     capacity: 20Gi
@@ -53,16 +53,16 @@ spec:
 | Field            | Type                                                         | Description                                                                                                                                                                                                         | Required | Mutable |
 |------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|---------|
 | `adminEndpoint`  | `string`                                                     | Base URL of the Garage Admin API, port 3903. The chart puts it on the same Service as the S3 API. Keep `service.type: ClusterIP`, because another type also makes the Admin API reachable from outside the cluster. | Yes      | Yes     |
-| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref)               | Reference to the `Opaque` Secret holding the Admin API bearer token. The chart creates one named after the release.                                                                                                 | Yes      | Yes     |
+| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref)               | Reference to the `Opaque` Secret holding the Admin API bearer token: the Secret set as `admin.existingSecret.name` of the chart.                                                                                    | Yes      | Yes     |
 | `layout`         | [`GarageClusterLayoutSpec`](#garageclusterlayoutspec-layout) | The role a storage node gets in the cluster layout, see [Scope](#scope).                                                                                                                                            | Yes      | Yes     |
 
 ### SecretKeyRef (`adminSecretRef`)
 
-| Field       | Type     | Description                                                                           | Required |
-|-------------|----------|---------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageCluster`. | No       |
-| `name`      | `string` | Name of the Secret.                                                                   | Yes      |
-| `key`       | `string` | Key within the Secret. The chart stores the token under `admin_token`.                | Yes      |
+| Field       | Type     | Description                                                                            | Required |
+|-------------|----------|----------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageCluster`.  | No       |
+| `name`      | `string` | Name of the Secret.                                                                    | Yes      |
+| `key`       | `string` | Key within the Secret. The chart reads the token from `GARAGE_ADMIN_TOKEN` by default. | Yes      |
 
 ### GarageClusterLayoutSpec (`layout`)
 

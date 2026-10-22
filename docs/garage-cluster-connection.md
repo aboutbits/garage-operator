@@ -29,24 +29,24 @@ metadata:
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
-    name: acme-garage
-    key: admin_token
+    name: acme-garage-admin
+    key: GARAGE_ADMIN_TOKEN
 ```
 
 ## Spec
 
-| Field            | Type                                           | Description                                                                               | Required | Mutable |
-|------------------|------------------------------------------------|-------------------------------------------------------------------------------------------|----------|---------|
-| `adminEndpoint`  | `string`                                       | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use. | Yes      | No      |
-| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the `Opaque` Secret holding the Admin API bearer token.                      | Yes      | Yes     |
+| Field            | Type                                           | Description                                                                                                                      | Required | Mutable |
+|------------------|------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|----------|---------|
+| `adminEndpoint`  | `string`                                       | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use.                                        | Yes      | No      |
+| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the `Opaque` Secret holding the Admin API bearer token: the Secret set as `admin.existingSecret.name` of the chart. | Yes      | Yes     |
 
 ### SecretKeyRef (`adminSecretRef`)
 
-| Field       | Type     | Description                                                                                     | Required |
-|-------------|----------|-------------------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageClusterConnection`. | No       |
-| `name`      | `string` | Name of the Secret.                                                                             | Yes      |
-| `key`       | `string` | Key within the Secret. The AboutBits Garage chart uses `admin_token`.                           | Yes      |
+| Field       | Type     | Description                                                                                             | Required |
+|-------------|----------|---------------------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageClusterConnection`.         | No       |
+| `name`      | `string` | Name of the Secret.                                                                                     | Yes      |
+| `key`       | `string` | Key within the Secret. The AboutBits Garage chart reads the token from `GARAGE_ADMIN_TOKEN` by default. | Yes      |
 
 `adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `GarageClusterConnection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token.
 
