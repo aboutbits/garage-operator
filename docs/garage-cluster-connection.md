@@ -35,20 +35,20 @@ spec:
 
 ## Spec
 
-| Field            | Type                                           | Description                                                                                                                      | Required | Mutable |
-|------------------|------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|----------|---------|
-| `adminEndpoint`  | `string`                                       | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use.                                        | Yes      | No      |
-| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the `Opaque` Secret holding the Admin API bearer token: the Secret set as `admin.existingSecret.name` of the chart. | Yes      | Yes     |
+| Field            | Type                                           | Description                                                                                                                                                                                                     | Required | Mutable |
+|------------------|------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|---------|
+| `adminEndpoint`  | `string`                                       | Base URL of the Garage **Admin** API, port 3903. This is not the S3 endpoint clients use.                                                                                                                       | Yes      | No      |
+| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref) | Reference to the `Opaque` Secret holding the Admin API bearer token: the Secret set as `admin.existingSecret.name` of the chart. If the chart reads the token from a file, create a Secret with the same token. | Yes      | Yes     |
 
 ### SecretKeyRef (`adminSecretRef`)
 
-| Field       | Type     | Description                                                                                             | Required |
-|-------------|----------|---------------------------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageClusterConnection`.         | No       |
-| `name`      | `string` | Name of the Secret.                                                                                     | Yes      |
-| `key`       | `string` | Key within the Secret. The AboutBits Garage chart reads the token from `GARAGE_ADMIN_TOKEN` by default. | Yes      |
+| Field       | Type     | Description                                                                                                  | Required |
+|-------------|----------|--------------------------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageClusterConnection`.              | No       |
+| `name`      | `string` | Name of the Secret.                                                                                          | Yes      |
+| `key`       | `string` | Key within the Secret: the same as `admin.existingSecret.key` of the chart, by default `GARAGE_ADMIN_TOKEN`. | Yes      |
 
-`adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `GarageClusterConnection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token.
+`adminEndpoint` is immutable, because buckets and access keys record the ids that they get from this Garage. A changed endpoint would create second ones on another Garage. Delete and recreate the `GarageClusterConnection` to point it at a different Garage. `adminSecretRef` can change, for example to rotate the token. After the token changes in the Secret, restart the Garage Pod: Garage reads the token only at startup, see the chart readme.
 
 The token needs access to these Admin API endpoints:
 
@@ -59,7 +59,7 @@ The token needs access to these Admin API endpoints:
 | [`GarageAccessKey`](garage-access-key.md)       | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
 | [`GarageBucketAccess`](garage-bucket-access.md) | `ListBuckets`, `GetBucketInfo`, `AllowBucketKey`, `DenyBucketKey`              |
 
-The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
+The admin token set as `admin.existingSecret` of the chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 
 ## Status
 

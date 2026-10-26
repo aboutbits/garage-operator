@@ -24,7 +24,8 @@ public class GarageClusterConnectionSpec {
     )
     private String adminEndpoint = "";
 
-    /// The `Opaque` Secret set as `admin.existingSecret.name` of the Garage Helm chart, whose default key is `GARAGE_ADMIN_TOKEN`.
+    /// The `Opaque` Secret set as `admin.existingSecret.name` of the Garage Helm chart, whose default key is
+    /// `GARAGE_ADMIN_TOKEN`.
     @Required
     private SecretKeyRef adminSecretRef = new SecretKeyRef();
 }
