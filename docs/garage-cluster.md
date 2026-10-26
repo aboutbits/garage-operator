@@ -39,8 +39,8 @@ metadata:
 spec:
   adminEndpoint: http://acme-garage.acme.svc:3903
   adminSecretRef:
-    name: acme-garage
-    key: admin_token
+    name: acme-garage-admin
+    key: GARAGE_ADMIN_TOKEN
   layout:
     zone: default
     capacity: 20Gi
@@ -53,16 +53,16 @@ spec:
 | Field            | Type                                                         | Description                                                                                                                                                                                                         | Required | Mutable |
 |------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|---------|
 | `adminEndpoint`  | `string`                                                     | Base URL of the Garage Admin API, port 3903. The chart puts it on the same Service as the S3 API. Keep `service.type: ClusterIP`, because another type also makes the Admin API reachable from outside the cluster. | Yes      | Yes     |
-| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref)               | Reference to the `Opaque` Secret holding the Admin API bearer token. The chart creates one named after the release.                                                                                                 | Yes      | Yes     |
+| `adminSecretRef` | [`SecretKeyRef`](#secretkeyref-adminsecretref)               | Reference to the `Opaque` Secret holding the Admin API bearer token: the Secret set as `admin.existingSecret.name` of the chart. If the chart reads the token from a file, create a Secret with the same token.     | Yes      | Yes     |
 | `layout`         | [`GarageClusterLayoutSpec`](#garageclusterlayoutspec-layout) | The role a storage node gets in the cluster layout, see [Scope](#scope).                                                                                                                                            | Yes      | Yes     |
 
 ### SecretKeyRef (`adminSecretRef`)
 
-| Field       | Type     | Description                                                                           | Required |
-|-------------|----------|---------------------------------------------------------------------------------------|----------|
-| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageCluster`. | No       |
-| `name`      | `string` | Name of the Secret.                                                                   | Yes      |
-| `key`       | `string` | Key within the Secret. The chart stores the token under `admin_token`.                | Yes      |
+| Field       | Type     | Description                                                                                                  | Required |
+|-------------|----------|--------------------------------------------------------------------------------------------------------------|----------|
+| `namespace` | `string` | Namespace of the Secret. If not specified, uses the namespace of the `GarageCluster`.                        | No       |
+| `name`      | `string` | Name of the Secret.                                                                                          | Yes      |
+| `key`       | `string` | Key within the Secret: the same as `admin.existingSecret.key` of the chart, by default `GARAGE_ADMIN_TOKEN`. | Yes      |
 
 ### GarageClusterLayoutSpec (`layout`)
 
@@ -72,11 +72,11 @@ spec:
 | `capacity` | `string`        | Storage capacity to advertise, as a Kubernetes quantity such as `20Gi`. Should match the size of the chart's data volume. Garage uses it to weight partition distribution; it is not enforced as a limit. | Yes      |
 | `tags`     | `array[string]` | Tags to attach to the node. Informational; order is not significant.                                                                                                                                      | No       |
 
-A change to a `Mutable` field is applied at the next reconcile. A change to `layout` applies a new layout version. On a single node no data moves. A role that you change by hand with the Garage CLI is reset at the next reconcile, at most 10 minutes later.
+A change to a `Mutable` field is applied at the next reconcile. After the token changes in the Secret, restart the Garage Pod: Garage reads the token only at startup, see the chart readme. A change to `layout` applies a new layout version. On a single node no data moves. A role that you change by hand with the Garage CLI is reset at the next reconcile, at most 10 minutes later.
 
 Note that the CRD schema carries no defaults — every required field has to be spelled out in the manifest.
 
-The token needs access to these Admin API endpoints: `GetClusterStatus`, `GetClusterHealth`, `GetClusterLayout`, `UpdateClusterLayout` and `ApplyClusterLayout`. The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
+The token needs access to these Admin API endpoints: `GetClusterStatus`, `GetClusterHealth`, `GetClusterLayout`, `UpdateClusterLayout` and `ApplyClusterLayout`. The admin token set as `admin.existingSecret` of the chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 
 ## Status
 

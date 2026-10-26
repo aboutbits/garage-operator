@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NullMarked;
 
-/// [#key] is deliberately not validated as an object name: Secret data keys are more permissive (`admin_token`).
+/// [#key] is deliberately not validated as an object name: Secret data keys are more permissive (`GARAGE_ADMIN_TOKEN`).
 @Getter
 @Setter
 @NullMarked
