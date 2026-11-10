@@ -16,7 +16,7 @@ awsSdk = "2.55.3"
 checkstyle = "13.4.1"
 datafaker = "2.5.4"
 errorProne = "2.49.0"
-errorPronePlugin = "5.1.0"
+errorPronePlugin = "5.2.0"
 nullAway = "0.13.4"
 
 [plugins]
