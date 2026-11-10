@@ -129,6 +129,8 @@ subprojects {
                 val excludePatterns = project.property("excludeTests").toString().split(",")
                 excludePatterns.forEach { pattern ->
                     excludeTestsMatching(pattern.trim())
+                    // A pattern ending in a class name does not match its @Nested classes (Outer$Inner)
+                    excludeTestsMatching("${pattern.trim()}\$*")
                 }
             }
         }

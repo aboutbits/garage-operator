@@ -352,7 +352,7 @@ make init
 
 # or
 
-./gradlew :operator:quarkusBuild
+./gradlew --console=colored :operator:quarkusBuild
 ```
 
 Enable the pre-commit hook with:
@@ -370,7 +370,7 @@ make run
 
 # or
 
-./gradlew :operator:quarkusDev
+./gradlew --console=colored :operator:quarkusDev
 ```
 
 To execute the tests, run:
@@ -380,7 +380,7 @@ make test
 
 # or
 
-./gradlew :operator:test
+./gradlew --console=colored :operator:test
 ```
 
 The tests are `@QuarkusTest` integration tests against real infrastructure provided by Quarkus Dev Services: a K3s cluster with the CRDs applied, and a Garage node started from `operator/src/main/docker/compose-devservices.yml`. The Garage image there is pinned to the version the Helm chart deploys, so the Admin API contract is exercised against the real thing.
