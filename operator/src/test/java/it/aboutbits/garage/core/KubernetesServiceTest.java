@@ -24,8 +24,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class KubernetesServiceTest {
     private static final String NAMESPACE = "acme";
     private static final String DEFAULT_NAMESPACE = "default-ns";
-    private static final String SECRET_NAME = "acme-garage";
-    private static final String SECRET_KEY = "admin_token";
+    private static final String SECRET_NAME = "acme-garage-admin";
+    private static final String SECRET_KEY = "GARAGE_ADMIN_TOKEN";
 
     @SuppressWarnings("NullAway.Init")
     static KubernetesClient client;
@@ -123,7 +123,7 @@ class KubernetesServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessage("Secret reference not found [secret=acme/acme-garage]");
+                    .hasMessage("Secret reference not found [secret=acme/acme-garage-admin]");
         }
 
         @Test
@@ -140,7 +140,7 @@ class KubernetesServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("The Secret reference is of the wrong type [secret=acme/acme-garage, expectedType=Opaque, actualType=kubernetes.io/basic-auth]");
+                    .hasMessage("The Secret reference is of the wrong type [secret=acme/acme-garage-admin, expectedType=Opaque, actualType=kubernetes.io/basic-auth]");
         }
 
         @Test
@@ -157,7 +157,7 @@ class KubernetesServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessage("The Secret reference has no data set [secret=acme/acme-garage]");
+                    .hasMessage("The Secret reference has no data set [secret=acme/acme-garage-admin]");
         }
 
         @Test
@@ -174,7 +174,7 @@ class KubernetesServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessage("The Secret reference has no data set [secret=acme/acme-garage]");
+                    .hasMessage("The Secret reference has no data set [secret=acme/acme-garage-admin]");
         }
 
         @Test
@@ -191,7 +191,7 @@ class KubernetesServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessage("The Secret reference is missing the referenced key [secret=acme/acme-garage, secret.key=admin_token, availableKeys=[other]]");
+                    .hasMessage("The Secret reference is missing the referenced key [secret=acme/acme-garage-admin, secret.key=GARAGE_ADMIN_TOKEN, availableKeys=[other]]");
         }
 
         @ParameterizedTest
@@ -209,7 +209,7 @@ class KubernetesServiceTest {
             // then
             assertThat(thrown)
                     .isInstanceOf(IllegalStateException.class)
-                    .hasMessage("The Secret reference has a blank token [secret=acme/acme-garage, secret.key=admin_token]");
+                    .hasMessage("The Secret reference has a blank token [secret=acme/acme-garage-admin, secret.key=GARAGE_ADMIN_TOKEN]");
         }
     }
 }
