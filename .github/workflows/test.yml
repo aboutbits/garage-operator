@@ -3,6 +3,10 @@ name: Tests
 on:
   workflow_call:
 
+env:
+  # The workflows that call this one do not pass their env to it and set their own JAVA_VERSION: keep all equal.
+  JAVA_VERSION: 25
+
 permissions:
   contents: read
 
@@ -15,7 +19,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: aboutbits/github-actions-java/setup-with-gradle@v4
         with:
-          java-version: 25
+          java-version: ${{ env.JAVA_VERSION }}
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - name: Build & Test
         run: >-

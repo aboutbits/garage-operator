@@ -15,6 +15,7 @@ on:
           - "Prerelease"
 
 env:
+  JAVA_VERSION: 25
   DOCKER_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
@@ -34,7 +35,7 @@ jobs:
       - uses: aboutbits/github-actions-base/git-setup@v2
       - uses: aboutbits/github-actions-java/setup-with-gradle@v4
         with:
-          java-version: 25
+          java-version: ${{ env.JAVA_VERSION }}
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - name: Increment version
         # verifyRelease of the axion-release plugin resolves the configurations of the operator project from the
