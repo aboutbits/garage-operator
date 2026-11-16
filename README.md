@@ -325,7 +325,7 @@ To build the project, the following prerequisites must be met:
 - Java JDK 25 (provisioned automatically by the Gradle toolchain)
 - [Docker](https://www.docker.com/), for the Quarkus Dev Services
 - The [`helm`](https://helm.sh/) CLI, for the Helm chart test
-- [`rumdl`](https://github.com/rvben/rumdl), for `make lint`
+- Markdown linter [`rumdl`](https://github.com/rvben/rumdl), for `make lint` and the Git pre-commit hook: `brew install rumdl`
 
 ### Setup
 
@@ -355,11 +355,13 @@ make init
 ./gradlew --console=colored :operator:quarkusBuild
 ```
 
-Enable the pre-commit hook with:
+Enable the Git pre-commit hook, which runs the linters before each commit:
 
 ```bash
 git config core.hooksPath .githooks
 ```
+
+Run `make lint` to run the linters by hand, and `make lint-fix` to fix the Markdown problems that rumdl can fix.
 
 ### Development
 
