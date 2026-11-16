@@ -361,6 +361,8 @@ Enable the Git pre-commit hook, which runs the linters before each commit:
 git config core.hooksPath .githooks
 ```
 
+Run `make lint` to run the linters by hand, and `make lint-fix` to fix the Markdown problems that rumdl can fix.
+
 ### Development
 
 You can run the operator in dev mode, against a throwaway K3s cluster and a real Garage node, using:
