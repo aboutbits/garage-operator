@@ -77,7 +77,7 @@ The [`Makefile`](./Makefile) holds the common commands:
 - **Run the tests**: `make test`
 - **Run Checkstyle**: `./gradlew checkstyleMain checkstyleTest`. It needs GitHub Packages credentials, see the
   [`README.md`](./README.md).
-- **Lint Markdown**: `make lint`
+- **Lint** the code with Checkstyle and the Markdown files with rumdl: `make lint`; fix the Markdown files: `make lint-fix`
 
 ## 🧩 Automation Skills
 

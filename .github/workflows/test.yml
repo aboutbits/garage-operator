@@ -17,6 +17,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - uses: rvben/rumdl@v0
+        with:
+          config: .rumdl.toml
+          report-type: annotations
       - uses: aboutbits/github-actions-java/setup-with-gradle@v4
         with:
           java-version: ${{ env.JAVA_VERSION }}

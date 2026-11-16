@@ -17,7 +17,11 @@ test:
 ### UTILITIES
 
 lint:
+	./gradlew --console=colored checkstyleMain checkstyleTest
 	rumdl check .
 
+lint-fix:
+	rumdl check --fix .
+
 # Flag targets as phony, to tell `make` that these are no file targets
-.PHONY: init install run test lint
+.PHONY: init install run test lint lint-fix
