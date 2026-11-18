@@ -5,6 +5,8 @@ quarkus:
   compose:
     devservices:
       files: src/main/docker/compose-devservices.yml
+      # The three-node Garage of the multi-node tests; dev mode does without it.
+      profiles: garage-cluster
 
 # The admin token the Compose Dev Service's garage.toml is configured with.
 garage:

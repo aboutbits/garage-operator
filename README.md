@@ -2,7 +2,7 @@
 
 AboutBits Garage Operator is a Kubernetes operator that manages S3 object storage declaratively: the cluster layout of a [Garage](https://garagehq.deuxfleurs.fr/) installation, buckets, access keys and the permissions that tie them together, all as Custom Resources.
 
-It is the companion of the [AboutBits Garage Helm chart](https://github.com/aboutbits/helm-garage): the chart runs Garage, the operator sets it up and manages what lives on it.
+It does not deploy Garage, and works with any Garage installation, for example one of the [AboutBits Garage Helm chart](https://github.com/aboutbits/helm-garage) or of the official Garage chart: whatever deploys Garage runs it, the operator sets it up and manages what lives on it.
 
 ## Compatibility
 
@@ -13,7 +13,7 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 
 > **Note:** Kubernetes 1.34+ is required. The tests run against K3s 1.34, and older Kubernetes versions are end-of-life. The Helm chart refuses to install on an older cluster.
 >
-> **Note:** A [`GarageCluster`](docs/garage-cluster.md) needs Garage installed with the chart value `garage.singleNode: false`. With the default `--single-node`, Garage creates its layout itself and does not start again once the operator has applied a newer one. Without a `GarageCluster`, keep the default.
+> **Note:** A [`GarageCluster`](docs/garage-cluster.md) needs Garage started without `--single-node`; the AboutBits chart does so with `garage.singleNode: false`. With `--single-node`, Garage creates its layout itself and does not start again once the operator has applied a newer one. Without a `GarageCluster`, a single node can keep `--single-node`.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 │  └─────────────────────────────┘   └─────────────────────┬──────────────────────┘ │
 │                                                          │                        │
 │                                        ┌─────────────────▼─────────────────┐      │
-│                                        │  Garage (AboutBits Helm chart)    │      │
+│                                        │  Garage, one node or several      │      │
 │                                        │  Admin API :3903 · S3 API :3900   │      │
 │                                        └───────────────────────────────────┘      │
 └───────────────────────────────────────────────────────────────────────────────────┘
@@ -44,15 +44,15 @@ It is the companion of the [AboutBits Garage Helm chart](https://github.com/abou
 
 The operator talks to Garage only through its [Admin API v2](https://garagehq.deuxfleurs.fr/documentation/reference-manual/admin-api/). The S3 API cannot do this job: it has no notion of access keys, and Garage implements neither IAM nor bucket policies — its permissions are per key and per bucket, and only reachable through the Admin API.
 
-The work is split with the Helm chart like this:
+The work is split with whatever deploys Garage like this:
 
-| Concern                                                                                            | Owner                                                                        |
-|----------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
-| StatefulSet, volumes, `garage.toml`, the admin token, Services                                     | [Garage Helm chart](https://github.com/aboutbits/helm-garage)                |
-| Cluster layout — with `garage.singleNode: false`, Garage serves no S3 traffic until one is applied | Operator, through `GarageCluster`                                            |
-| Buckets, access keys, permissions                                                                  | Operator, through `GarageBucket`, `GarageAccessKey` and `GarageBucketAccess` |
+| Concern                                                                                                     | Owner                                                                        |
+|-------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| Workloads, volumes, `garage.toml`, the admin token, Services, connecting the nodes to each other             | The deployment, for example a Helm chart                                     |
+| Cluster layout — without `--single-node`, Garage serves no S3 traffic until one is applied                  | Operator, through `GarageCluster`                                            |
+| Buckets, access keys, permissions                                                                           | Operator, through `GarageBucket`, `GarageAccessKey` and `GarageBucketAccess` |
 
-The chart's own `bootstrap` option (one bucket and one key on first boot) is a testing convenience. In production, leave it off and declare those as Custom Resources instead.
+The `bootstrap` option of the AboutBits chart (one bucket and one key on first boot) is a testing convenience. In production, leave it off and declare those as Custom Resources instead.
 
 ## Installation
 
@@ -154,7 +154,7 @@ All resources live in the API group `garage.aboutbits.it`, version `v1`, and are
 
 ### Showcase
 
-The following example sets up a Garage installed with the AboutBits Helm chart and `garage.singleNode: false` as release `acme` in the namespace `acme`, and gives an application read and write access to one bucket. The chart names its Services and its admin Secret after the release, so the admin API is `acme-garage:3903`, S3 is `acme-garage:3900`, and the token is the `admin_token` key of the Secret `acme-garage`.
+The following example sets up a Garage installed with the AboutBits Helm chart and `garage.singleNode: false` as release `acme` in the namespace `acme`, and gives an application read and write access to one bucket. The chart names its Services and its admin Secret after the release, so the admin API is `acme-garage:3903`, S3 is `acme-garage:3900`, and the token is the `admin_token` key of the Secret `acme-garage`. With another installation, use its Admin API endpoint and admin Secret; for a Garage of several nodes, see [`GarageCluster`](docs/garage-cluster.md#nodes-and-roles).
 
 ```yaml
 # Assign the cluster layout. With `garage.singleNode: false`, Garage serves no S3 traffic until this is done.
@@ -311,7 +311,7 @@ The operator runs as a single replica without leader election. Two instances wou
 
 ## Limitations
 
-- `GarageCluster` assigns layouts for clusters with **one node** only, which is what the AboutBits Helm chart deploys; that is unrelated to the chart's `--single-node` mode, which a `GarageCluster` requires to be off. On a larger cluster it reports `ERROR` instead of guessing zones and capacities.
+- `GarageCluster` gives every storage node the same role: a different zone or capacity per node, and gateway nodes, are not supported yet. It does not connect nodes to each other either; that is up to whatever deploys Garage.
 - No credential rotation trigger, no lifecycle rules and no website configuration yet.
 
 ## Contribute
@@ -385,7 +385,7 @@ make test
 ./gradlew --console=colored :operator:test
 ```
 
-The tests are `@QuarkusTest` integration tests against real infrastructure provided by Quarkus Dev Services: a K3s cluster with the CRDs applied, and a Garage node started from `operator/src/main/docker/compose-devservices.yml`. The Garage image there is pinned to the version the Helm chart deploys, so the Admin API contract is exercised against the real thing.
+The tests are `@QuarkusTest` integration tests against real infrastructure provided by Quarkus Dev Services: a K3s cluster with the CRDs applied, and Garage started from `operator/src/main/docker/compose-devservices.yml`: a single node, and a separate cluster of three nodes for the multi-node tests. The Garage image there is pinned to the version this README names as tested, so the Admin API contract is exercised against the real thing.
 
 ## Information
 

@@ -1,5 +1,6 @@
 package it.aboutbits.garage._support.testdata.persisted.creator;
 
+import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import it.aboutbits.garage._support.testdata.base.TestDataCreator;
@@ -39,6 +40,12 @@ public class GarageClusterCreate extends TestDataCreator<GarageCluster> {
 
     private @Nullable List<String> withTags;
 
+    private @Nullable Integer withMinNodes;
+
+    private @Nullable IntOrString withZoneRedundancy;
+
+    private @Nullable List<String> withRemovedNodes;
+
     public GarageClusterCreate(
             int numberOfItems,
             Given given,
@@ -75,6 +82,9 @@ public class GarageClusterCreate extends TestDataCreator<GarageCluster> {
         spec.setAdminEndpoint(getAdminEndpoint());
         spec.setAdminSecretRef(getAdminSecretRef());
         spec.setLayout(layout);
+        spec.setMinNodes(withMinNodes);
+        spec.setZoneRedundancy(withZoneRedundancy);
+        spec.setRemovedNodes(withRemovedNodes);
 
         item.setSpec(spec);
 

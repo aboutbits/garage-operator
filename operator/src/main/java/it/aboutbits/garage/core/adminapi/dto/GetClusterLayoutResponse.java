@@ -2,6 +2,7 @@ package it.aboutbits.garage.core.adminapi.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 
@@ -10,6 +11,9 @@ import java.util.List;
 public record GetClusterLayoutResponse(
         long version,
         List<LayoutNodeRole> roles,
-        List<NodeRoleChangeRequest> stagedRoleChanges
+        LayoutParameters parameters,
+        List<NodeRoleChangeRequest> stagedRoleChanges,
+        // `null` unless staged parameters differ from the current ones.
+        @Nullable LayoutParameters stagedParameters
 ) {
 }

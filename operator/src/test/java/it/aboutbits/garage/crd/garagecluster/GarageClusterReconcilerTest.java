@@ -1,5 +1,6 @@
 package it.aboutbits.garage.crd.garagecluster;
 
+import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.quarkus.test.junit.QuarkusTest;
@@ -126,14 +127,20 @@ class GarageClusterReconcilerTest {
             var status = reconciled.getStatus();
 
             assertThat(status.getLayoutVersion()).isPositive();
-            assertThat(status.getNodeId()).isNotBlank();
+            assertThat(status.getNodes()).hasSize(1);
             assertThat(status.getHealth()).isNotBlank();
             assertThat(status.getStorageNodes()).isEqualTo(1);
+
+            var nodeStatus = status.getNodes().getFirst();
+
+            assertThat(nodeStatus.isUp()).isTrue();
+            assertThat(nodeStatus.getZone()).isEqualTo("default");
+            assertThat(nodeStatus.getCapacity()).isEqualTo(21474836480L);
 
             // Verify against Garage itself rather than trusting the status we just wrote.
             var node = garageAdminApi().getClusterStatus().nodes().getFirst();
 
-            assertThat(node.id()).isEqualTo(status.getNodeId());
+            assertThat(node.id()).isEqualTo(nodeStatus.getId());
             assertThat(node.role()).isNotNull();
 
             var role = Objects.requireNonNull(node.role());
@@ -199,7 +206,7 @@ class GarageClusterReconcilerTest {
     @Nested
     class Failures {
         @Test
-        @DisplayName("A second GarageCluster for the same Garage node should surface as an error, and leave the layout alone")
+        @DisplayName("A second GarageCluster for the same Garage should surface as an error, and leave the layout alone")
         void secondGarageCluster_setsErrorPhase() {
             // given
             var first = given.one()
@@ -226,10 +233,10 @@ class GarageClusterReconcilerTest {
                             first.getMetadata().getName()
                     )
             );
-            assertThat(reconciled.getStatus().getNodeId()).isNull();
+            assertThat(reconciled.getStatus().getNodes()).isEmpty();
             assertThat(garageAdminApi().getClusterLayout().version()).isEqualTo(layoutVersion);
 
-            assertThat(awaitPhase(kubernetesClient, first, CRPhase.READY).getStatus().getNodeId()).isNotBlank();
+            assertThat(awaitPhase(kubernetesClient, first, CRPhase.READY).getStatus().getNodes()).hasSize(1);
         }
 
         @Test
@@ -409,6 +416,64 @@ class GarageClusterReconcilerTest {
             // then
             assertThat(thrown.getCode()).isEqualTo(422);
             assertThat(thrown.getMessage()).contains("The zone must not be empty.");
+        }
+
+        @Test
+        @DisplayName("A minNodes below 1 should be rejected")
+        void minNodesBelowOne_isRejected() {
+            // when
+            var thrown = catchThrowableOfType(
+                    KubernetesClientException.class,
+                    () -> given.one()
+                            .garageCluster()
+                            .withMinNodes(0)
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown.getCode()).isEqualTo(422);
+            assertThat(thrown.getMessage()).contains("spec.minNodes");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"0", "-1", "max", "Maximum", ""})
+        @DisplayName("A zoneRedundancy that is neither 'maximum' nor a number of zones of at least 1 should be rejected")
+        void invalidZoneRedundancy_isRejected(String zoneRedundancy) {
+            // given
+            var value = zoneRedundancy.matches("-?\\d+")
+                    ? new IntOrString(Integer.parseInt(zoneRedundancy))
+                    : new IntOrString(zoneRedundancy);
+
+            // when
+            var thrown = catchThrowableOfType(
+                    KubernetesClientException.class,
+                    () -> given.one()
+                            .garageCluster()
+                            .withZoneRedundancy(value)
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown.getCode()).isEqualTo(422);
+            assertThat(thrown.getMessage()).contains("The zoneRedundancy must be 'maximum' or a number of zones of at least 1.");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "a0f61c85", "garage-0", "A0F61C85A0F61C85A0F61C85A0F61C85A0F61C85A0F61C85A0F61C85A0F61C85"})
+        @DisplayName("An entry of removedNodes that is not a full node id should be rejected")
+        void invalidRemovedNode_isRejected(String removedNode) {
+            // when
+            var thrown = catchThrowableOfType(
+                    KubernetesClientException.class,
+                    () -> given.one()
+                            .garageCluster()
+                            .withRemovedNodes(List.of(removedNode))
+                            .returnFirst()
+            );
+
+            // then
+            assertThat(thrown.getCode()).isEqualTo(422);
+            assertThat(thrown.getMessage()).contains("spec.removedNodes[0] in body should match '^[0-9a-f]{64}$'");
         }
     }
 }

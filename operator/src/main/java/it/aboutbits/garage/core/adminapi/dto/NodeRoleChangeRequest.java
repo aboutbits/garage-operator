@@ -28,4 +28,14 @@ public record NodeRoleChangeRequest(
                 null
         );
     }
+
+    public static NodeRoleChangeRequest remove(String id) {
+        return new NodeRoleChangeRequest(
+                id,
+                null,
+                null,
+                null,
+                true
+        );
+    }
 }
