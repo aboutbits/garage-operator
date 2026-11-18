@@ -19,7 +19,7 @@ public class GarageClusterSpec {
     )
     private String adminEndpoint = "";
 
-    /// The chart's `Opaque` Secret, i.e. `{name: <release>-garage, key: admin_token}`.
+    /// The `Opaque` Secret set as `admin.existingSecret.name` of the chart, whose default key is `GARAGE_ADMIN_TOKEN`.
     /// The key has to be spelled out: the CRD schema carries no defaults.
     @Required
     private SecretKeyRef adminSecretRef = new SecretKeyRef();
