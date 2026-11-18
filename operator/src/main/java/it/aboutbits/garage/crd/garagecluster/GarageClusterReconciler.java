@@ -38,7 +38,8 @@ import java.util.concurrent.TimeUnit;
 public class GarageClusterReconciler
         extends BaseReconciler<GarageCluster, GarageClusterStatus>
         implements Reconciler<GarageCluster> {
-    private static final long BOOTSTRAP_RETRY_SECONDS = 15;
+    /// While Garage is being installed, and while a node hands its data over.
+    private static final long FOLLOW_UP_SECONDS = 15;
 
     private final GarageClusterService garageClusterService;
     private final GarageAdminClientFactory garageAdminClientFactory;
@@ -73,16 +74,17 @@ public class GarageClusterReconciler
                     resource
             );
 
-            // Keep the recorded node while Garage reports none, so that no second GarageCluster can claim it meanwhile.
-            if (result.nodeId() != null) {
-                status.setNodeId(result.nodeId());
+            // Keep the recorded nodes while Garage reports none, so that no second GarageCluster can claim them meanwhile.
+            if (!result.nodes().isEmpty()) {
+                status.setNodes(result.nodes())
+                        .setNodeId(null);
             }
 
             status.setLayoutVersion(result.layoutVersion());
 
             return switch (result.outcome()) {
-                case NO_NODES, NODE_DOWN -> awaitingCluster(resource, status, result);
-                case UNSUPPORTED_TOPOLOGY -> unsupportedTopology(resource, status, result);
+                case AWAITING_NODES, OUTDATED_NODE -> awaitingCluster(resource, status, result);
+                case REJECTED -> rejected(resource, status, result);
                 case UP_TO_DATE, APPLIED -> ready(resource, status, result, garageAdminApi);
             };
         } catch (Exception e) {
@@ -99,7 +101,7 @@ public class GarageClusterReconciler
         return new GarageClusterStatus();
     }
 
-    /// Normal right after a `helm install`, so retried quickly rather than treated as an error.
+    /// Normal while Garage is being installed, so retried quickly rather than treated as an error.
     private UpdateControl<GarageCluster> awaitingCluster(
             GarageCluster resource,
             GarageClusterStatus status,
@@ -116,17 +118,17 @@ public class GarageClusterReconciler
                 .setMessage(result.message());
 
         return UpdateControl.patchStatus(resource)
-                .rescheduleAfter(BOOTSTRAP_RETRY_SECONDS, TimeUnit.SECONDS);
+                .rescheduleAfter(FOLLOW_UP_SECONDS, TimeUnit.SECONDS);
     }
 
-    /// An ERROR, since retrying will not fix it.
-    private UpdateControl<GarageCluster> unsupportedTopology(
+    /// Retried, since a node that connects later can make the layout valid.
+    private UpdateControl<GarageCluster> rejected(
             GarageCluster resource,
             GarageClusterStatus status,
             LayoutReconcileResult result
     ) {
         log.error(
-                "Refusing to manage the cluster layout [resource={}/{}, message={}]",
+                "Garage rejected the cluster layout [resource={}/{}, message={}]",
                 resource.getMetadata().getNamespace(),
                 resource.getMetadata().getName(),
                 result.message()
@@ -135,7 +137,8 @@ public class GarageClusterReconciler
         status.updatePhase(CRPhase.ERROR)
                 .setMessage(result.message());
 
-        return UpdateControl.patchStatus(resource);
+        return UpdateControl.patchStatus(resource)
+                .rescheduleAfter(RETRY_SECONDS, TimeUnit.SECONDS);
     }
 
     private UpdateControl<GarageCluster> ready(
@@ -152,6 +155,12 @@ public class GarageClusterReconciler
 
         status.updatePhase(CRPhase.READY)
                 .setMessage(result.message());
+
+        // `status.nodes` tells when a removed node can be shut down, so it follows Garage closely until then.
+        if (status.getNodes().stream().anyMatch(GarageClusterNodeStatus::isDraining)) {
+            return UpdateControl.patchStatus(resource)
+                    .rescheduleAfter(FOLLOW_UP_SECONDS, TimeUnit.SECONDS);
+        }
 
         return UpdateControl.patchStatus(resource);
     }

@@ -1,0 +1,25 @@
+# Garage configuration of the three-node cluster that the Compose Dev Service starts for the
+# multi-node tests, shared by all three nodes.
+#
+# The nodes find each other only when told to: the tests connect them through the Admin API, as
+# whatever deploys Garage does in production. Without `rpc_public_addr`, each node advertises the
+# address of its container.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "lmdb"
+
+# Below the number of nodes, so that one node can be taken out of the layout.
+replication_factor = 2
+
+rpc_bind_addr = "[::]:3901"
+# Test-only credentials, different from the single node's so that the two clusters never join.
+rpc_secret = "5c1e7d2a9b3f4e6a8d0c2b4f6e8a0c2d4f6b8e0a2c4d6f8b0e2a4c6d8f0b2e4a"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "test-admin-token"

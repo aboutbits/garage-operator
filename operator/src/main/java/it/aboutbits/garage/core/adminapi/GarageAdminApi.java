@@ -11,6 +11,7 @@ import it.aboutbits.garage.core.adminapi.dto.GetClusterStatusResponse;
 import it.aboutbits.garage.core.adminapi.dto.GetKeyInfoResponse;
 import it.aboutbits.garage.core.adminapi.dto.ListBucketsResponseItem;
 import it.aboutbits.garage.core.adminapi.dto.ListKeysResponseItem;
+import it.aboutbits.garage.core.adminapi.dto.PreviewClusterLayoutChangesResponse;
 import it.aboutbits.garage.core.adminapi.dto.UpdateBucketRequestBody;
 import it.aboutbits.garage.core.adminapi.dto.UpdateClusterLayoutRequest;
 import it.aboutbits.garage.core.adminapi.dto.UpdateKeyRequestBody;
@@ -49,9 +50,19 @@ public interface GarageAdminApi {
     @Path("/UpdateClusterLayout")
     GetClusterLayoutResponse updateClusterLayout(UpdateClusterLayoutRequest request);
 
+    /// Computes the layout from the staged changes, without applying it.
+    @POST
+    @Path("/PreviewClusterLayoutChanges")
+    PreviewClusterLayoutChangesResponse previewClusterLayoutChanges();
+
     @POST
     @Path("/ApplyClusterLayout")
     ApplyClusterLayoutResponse applyClusterLayout(ApplyClusterLayoutRequest request);
+
+    /// Discards all staged changes, also those staged by hand.
+    @POST
+    @Path("/RevertClusterLayout")
+    GetClusterLayoutResponse revertClusterLayout();
 
     /// Used to resolve buckets, because the API documents no response for an unknown bucket on `GetBucketInfo`.
     @GET

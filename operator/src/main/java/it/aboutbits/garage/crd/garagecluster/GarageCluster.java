@@ -11,7 +11,7 @@ import it.aboutbits.garage.core.Constants;
 import it.aboutbits.garage.core.Named;
 import org.jspecify.annotations.NullMarked;
 
-/// A Garage cluster whose layout the operator manages; everything else is owned by the Helm chart.
+/// A Garage cluster whose layout the operator manages. Running Garage is left to whatever deployed it.
 @Version(Constants.CRD_VERSION)
 @Group(Constants.CRD_GROUP)
 @Categories(Constants.CRD_CATEGORY)

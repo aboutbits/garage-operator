@@ -59,7 +59,7 @@ The token needs access to these Admin API endpoints:
 | [`GarageAccessKey`](garage-access-key.md)       | `ListKeys`, `GetKeyInfo`, `CreateKey`, `UpdateKey`, `DeleteKey`                |
 | [`GarageBucketAccess`](garage-bucket-access.md) | `ListBuckets`, `GetBucketInfo`, `AllowBucketKey`, `DenyBucketKey`              |
 
-The token of the Helm chart has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
+The `admin_token` of `garage.toml`, which the AboutBits chart sets, has access to all endpoints. A Garage admin token with a smaller scope must list the endpoints that it allows.
 
 ## Status
 
