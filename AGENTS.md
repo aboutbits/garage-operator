@@ -83,6 +83,6 @@ The [`Makefile`](./Makefile) holds the common commands:
 
 Before performing common tasks, check if a specialized skill exists in [`.agents/skills/`](./.agents/skills):
 
-| Skill           | Use when...         |
-|-----------------|---------------------|
-| `create-commit` | Making a git commit |
+| Skill                                                                                                 | Use when...         |
+|-------------------------------------------------------------------------------------------------------|---------------------|
+| `create-commit` from the [`git` plugin](https://github.com/aboutbits/agent-kit/tree/main/plugins/git) | Making a git commit |
