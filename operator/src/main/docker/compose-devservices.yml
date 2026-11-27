@@ -1,9 +1,8 @@
 services:
   garage:
-    # Keep this in sync with the image the AboutBits Garage Helm chart deploys.
-    # https://github.com/aboutbits/helm-garage
+    # Keep the version in sync with the other services, and with the version the README names as tested.
     image: dxflrs/garage:v2.4.1
-    # The chart's command with `garage.singleNode: false`, the mode a GarageCluster requires.
+    # Without `--single-node`, the mode a GarageCluster requires.
     command: ["/garage", "server"]
     volumes:
       - ./garage.toml:/etc/garage.toml:ro
@@ -17,3 +16,43 @@ services:
     labels:
       io.quarkus.devservices.compose.config_map.port.3900: garage.s3.port
       io.quarkus.devservices.compose.config_map.port.3903: garage.admin.port
+
+  # A second, separate Garage of three nodes, only for the multi-node tests.
+  garage-cluster-node-1:
+    image: dxflrs/garage:v2.4.1
+    command: ["/garage", "server"]
+    profiles: ["garage-cluster"]
+    volumes:
+      - ./garage-cluster.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage:rw,async,noatime
+    ports:
+      - "3903"
+    labels:
+      io.quarkus.devservices.compose.config_map.port.3903: garage.cluster.node-1.admin.port
+
+  garage-cluster-node-2:
+    image: dxflrs/garage:v2.4.1
+    command: ["/garage", "server"]
+    profiles: ["garage-cluster"]
+    volumes:
+      - ./garage-cluster.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage:rw,async,noatime
+    ports:
+      - "3903"
+    labels:
+      io.quarkus.devservices.compose.config_map.port.3903: garage.cluster.node-2.admin.port
+
+  garage-cluster-node-3:
+    image: dxflrs/garage:v2.4.1
+    command: ["/garage", "server"]
+    profiles: ["garage-cluster"]
+    volumes:
+      - ./garage-cluster.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage:rw,async,noatime
+    ports:
+      - "3903"
+    labels:
+      io.quarkus.devservices.compose.config_map.port.3903: garage.cluster.node-3.admin.port

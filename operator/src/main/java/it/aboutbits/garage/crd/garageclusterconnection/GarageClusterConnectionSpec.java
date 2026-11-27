@@ -24,7 +24,7 @@ public class GarageClusterConnectionSpec {
     )
     private String adminEndpoint = "";
 
-    /// The Garage Helm chart's `Opaque` Secret `<release>-garage`, with the key `admin_token`.
+    /// An `Opaque` Secret with the Admin API token. The key has to be spelled out: the CRD schema carries no defaults.
     @Required
     private SecretKeyRef adminSecretRef = new SecretKeyRef();
 }
